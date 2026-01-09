@@ -5,20 +5,23 @@ import { Search } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
-export default async function SessionsPage({ searchParams }: { searchParams: any }) {
+export default async function SessionsPage({ searchParams }: { searchParams: Promise<any> }) {
     const products = await getProducts();
-    const date = searchParams.date || '';
-    const status = searchParams.status || '';
-    const product = searchParams.product || '';
+    const sParams = await searchParams;
 
-    // Only fetch if at least one filter is applied (as per requirement: initially empty)
+    const startDate = sParams.startDate || '';
+    const endDate = sParams.endDate || '';
+    const status = sParams.status || '';
+    const product = sParams.product || '';
+
+    // Only fetch if at least one filter is applied
     let orders = [];
-    const isActive = date || status || product;
+    const isActive = startDate || endDate || status || product;
 
     if (isActive) {
         orders = await getOrders({
-            startDate: date,
-            endDate: date,
+            startDate: startDate,
+            endDate: endDate,
             status: status ? [status] : undefined,
             product: product ? [product] : undefined
         });
@@ -32,13 +35,22 @@ export default async function SessionsPage({ searchParams }: { searchParams: any
             </div>
 
             <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-200">
-                <form className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
+                <form className="grid grid-cols-1 md:grid-cols-5 gap-6 items-end">
                     <div className="space-y-2">
-                        <label className="text-sm font-bold text-gray-700">Tarih</label>
+                        <label className="text-sm font-bold text-gray-700">Başlangıç Tarihi</label>
                         <input
                             type="date"
-                            name="date"
-                            defaultValue={date}
+                            name="startDate"
+                            defaultValue={startDate}
+                            className="w-full border rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 font-medium"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <label className="text-sm font-bold text-gray-700">Bitiş Tarihi</label>
+                        <input
+                            type="date"
+                            name="endDate"
+                            defaultValue={endDate}
                             className="w-full border rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 font-medium"
                         />
                     </div>

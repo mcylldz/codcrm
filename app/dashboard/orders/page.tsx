@@ -5,17 +5,18 @@ import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
-export default async function OrdersPage({ searchParams }: { searchParams: any }) {
+export default async function OrdersPage({ searchParams }: { searchParams: Promise<any> }) {
     const products = await getProducts();
+    const sParams = await searchParams;
 
     // Parse filters from searchParams
     const filters = {
-        status: searchParams.status ? (Array.isArray(searchParams.status) ? searchParams.status : [searchParams.status]) : undefined,
-        excludeStatus: searchParams.excludeStatus ? (Array.isArray(searchParams.excludeStatus) ? searchParams.excludeStatus : [searchParams.excludeStatus]) : undefined,
-        startDate: searchParams.startDate,
-        endDate: searchParams.endDate,
-        product: searchParams.product ? (Array.isArray(searchParams.product) ? searchParams.product : [searchParams.product]) : undefined,
-        excludeProduct: searchParams.excludeProduct ? (Array.isArray(searchParams.excludeProduct) ? searchParams.excludeProduct : [searchParams.excludeProduct]) : undefined,
+        status: sParams.status ? (Array.isArray(sParams.status) ? sParams.status : [sParams.status]) : undefined,
+        excludeStatus: sParams.excludeStatus ? (Array.isArray(sParams.excludeStatus) ? sParams.excludeStatus : [sParams.excludeStatus]) : undefined,
+        startDate: sParams.startDate,
+        endDate: sParams.endDate,
+        product: sParams.product ? (Array.isArray(sParams.product) ? sParams.product : [sParams.product]) : undefined,
+        excludeProduct: sParams.excludeProduct ? (Array.isArray(sParams.excludeProduct) ? sParams.excludeProduct : [sParams.excludeProduct]) : undefined,
     };
 
     const orders = await getOrders(filters);
@@ -29,7 +30,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: any }
                 </span>
             </div>
 
-            <OrderSearchFilters products={products} initialFilters={searchParams} />
+            <OrderSearchFilters products={products} initialFilters={sParams} />
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                 <div className="overflow-x-auto">
@@ -57,9 +58,9 @@ export default async function OrdersPage({ searchParams }: { searchParams: any }
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className={`px-2 py-1 text-xs font-medium rounded-full ${order.status === 'teyit_alindi' ? 'bg-green-100 text-green-700' :
-                                                order.status === 'ulasilamadi' ? 'bg-orange-100 text-orange-700' :
-                                                    order.status === 'kabul_etmedi' ? 'bg-red-100 text-red-700' :
-                                                        'bg-blue-100 text-blue-700'
+                                            order.status === 'ulasilamadi' ? 'bg-orange-100 text-orange-700' :
+                                                order.status === 'kabul_etmedi' ? 'bg-red-100 text-red-700' :
+                                                    'bg-blue-100 text-blue-700'
                                             }`}>
                                             {getStatusLabel(order.status)}
                                         </span>

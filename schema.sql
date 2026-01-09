@@ -60,7 +60,9 @@ create table purchases (
   supplier_id uuid references suppliers(id),
   product_id uuid references products(id),
   amount int not null,
-  price decimal(10, 2),
+  unit_price decimal(10, 2),
+  shipping_cost decimal(10, 2),
+  total_price decimal(10, 2),
   date timestamp with time zone default timezone('utc'::text, now()),
   status purchase_status default 'yolda',
   created_at timestamp with time zone default timezone('utc'::text, now())

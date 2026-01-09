@@ -28,12 +28,26 @@ export async function deleteSupplier(id: string) {
 }
 
 // Purchases
-export async function createPurchase(data: { supplier_id: string; product_id: string; amount: number; price: number; date: string }) {
+export async function createPurchase(data: any) {
     const { error } = await supabaseAdmin.from('purchases').insert({
         ...data,
         status: 'yolda'
     });
 
+    if (error) return { success: false, error: error.message };
+    revalidatePath('/dashboard/suppliers');
+    return { success: true };
+}
+
+export async function updatePurchase(id: string, data: any) {
+    const { error } = await supabaseAdmin.from('purchases').update(data).eq('id', id);
+    if (error) return { success: false, error: error.message };
+    revalidatePath('/dashboard/suppliers');
+    return { success: true };
+}
+
+export async function deletePurchase(id: string) {
+    const { error } = await supabaseAdmin.from('purchases').delete().eq('id', id);
     if (error) return { success: false, error: error.message };
     revalidatePath('/dashboard/suppliers');
     return { success: true };
