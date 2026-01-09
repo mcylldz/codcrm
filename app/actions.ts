@@ -12,7 +12,7 @@ export async function updateOrder(id: string, data: any) {
 
         if (error) throw error;
         revalidatePath('/dashboard/sessions');
-        revalidatePath('/dashboard/pending');
+        revalidatePath('/dashboard/orders');
         return { success: true };
     } catch (error: any) {
         return { success: false, error: error.message };
