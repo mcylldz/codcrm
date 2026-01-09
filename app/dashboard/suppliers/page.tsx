@@ -1,24 +1,39 @@
 import { supabaseAdmin } from '@/lib/supabaseAdmin';
+import SupplierDashboard from './SupplierDashboard';
 
 export const dynamic = 'force-dynamic';
 
 export default async function SuppliersPage() {
+    // Fetch Suppliers with mapped products
     const { data: suppliers } = await supabaseAdmin
         .from('suppliers')
-        .select('*')
+        .select('*, supplier_products(products(*))')
         .order('company_name');
 
+    // Fetch Products
+    const { data: products } = await supabaseAdmin
+        .from('products')
+        .select('*')
+        .order('name');
+
+    // Fetch Purchases (Trade History)
+    const { data: purchases } = await supabaseAdmin
+        .from('purchases')
+        .select('*, suppliers(company_name), products(name)')
+        .order('date', { ascending: false });
+
     return (
-        <div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-6">Tedarikçi Yönetimi</h2>
-            <div className="bg-white p-6 rounded shadow">
-                <p className="text-gray-500 text-sm mb-4">Bu alan şu an sadece veritabanı altyapısı olarak mevcuttur. Tedarikçi ekleme arayüzü eklenecektir.</p>
-                <h3 className="font-bold mb-2">Mevcut Tedarikçiler:</h3>
-                <ul className="list-disc list-inside">
-                    {suppliers?.map(s => <li key={s.id}>{s.company_name} ({s.contact_name})</li>)}
-                    {(!suppliers || suppliers.length === 0) && <li className="text-gray-400">Kayıtlı tedarikçi yok.</li>}
-                </ul>
+        <div className="space-y-8">
+            <div>
+                <h2 className="text-3xl font-extrabold text-gray-900">Tedarikçi ve Stok Giriş Yönetimi</h2>
+                <p className="text-gray-500 mt-1 font-medium">Tedarikçilerinizi yönetin ve yeni stok girişlerini takip edin.</p>
             </div>
+
+            <SupplierDashboard
+                suppliers={suppliers || []}
+                products={products || []}
+                purchases={purchases || []}
+            />
         </div>
     );
 }

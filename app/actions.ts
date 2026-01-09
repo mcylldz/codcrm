@@ -19,6 +19,49 @@ export async function updateOrder(id: string, data: any) {
     }
 }
 
+export async function getOrders(filters: {
+    status?: string[];
+    excludeStatus?: string[];
+    startDate?: string;
+    endDate?: string;
+    product?: string[];
+    excludeProduct?: string[];
+}) {
+    let query = supabaseAdmin.from('orders').select('*');
+
+    if (filters.status && filters.status.length > 0) {
+        query = query.in('status', filters.status);
+    }
+    if (filters.excludeStatus && filters.excludeStatus.length > 0) {
+        query = query.not('status', 'in', `(${filters.excludeStatus.join(',')})`);
+    }
+
+    if (filters.startDate) {
+        query = query.gte('created_at', `${filters.startDate}T00:00:00.000Z`);
+    }
+    if (filters.endDate) {
+        query = query.lte('created_at', `${filters.endDate}T23:59:59.999Z`);
+    }
+
+    if (filters.product && filters.product.length > 0) {
+        query = query.in('product', filters.product);
+    }
+    if (filters.excludeProduct && filters.excludeProduct.length > 0) {
+        query = query.not('product', 'in', `(${filters.excludeProduct.join(',')})`);
+    }
+
+    const { data, error } = await query.order('created_at', { ascending: false });
+
+    if (error) throw new Error(error.message);
+    return data;
+}
+
+export async function getProducts() {
+    const { data, error } = await supabaseAdmin.from('products').select('*').order('name');
+    if (error) throw new Error(error.message);
+    return data;
+}
+
 export async function getOrdersByDate(dateStr: string) {
     // dateStr is YYYY-MM-DD
     // We want orders created on this date (UTC)

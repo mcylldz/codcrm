@@ -24,7 +24,7 @@ export default function DashboardLayout({
 
                 <nav className="flex-1 p-4 space-y-2">
                     <NavLink href="/dashboard" icon={<Home size={20} />} label="Genel Bakış" />
-                    <NavLink href="/dashboard/pending" icon={<ListChecks size={20} />} label="Teyit Bekleyenler" />
+                    <NavLink href="/dashboard/orders" icon={<ListChecks size={20} />} label="Siparişler" />
                     <NavLink href="/dashboard/sessions" icon={<Calendar size={20} />} label="Teyit Seansları" />
                     <NavLink href="/dashboard/inventory" icon={<Package size={20} />} label="Stok / Ürünler" />
                     <NavLink href="/dashboard/suppliers" icon={<Truck size={20} />} label="Tedarikçiler" />
