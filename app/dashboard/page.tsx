@@ -282,8 +282,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     );
 }
 
-function KPICard({ icon, label, value, change, trend, color }: any) {
-    const colors = {
+function KPICard({ icon, label, value, change, trend, color }: {
+    icon: React.ReactNode;
+    label: string;
+    value: string;
+    change: string;
+    trend: 'up' | 'down';
+    color: 'blue' | 'green' | 'purple' | 'orange' | 'teal' | 'pink';
+}) {
+    const colors: Record<'blue' | 'green' | 'purple' | 'orange' | 'teal' | 'pink', string> = {
         blue: 'from-blue-500 to-blue-600',
         green: 'from-green-500 to-green-600',
         purple: 'from-purple-500 to-purple-600',
@@ -312,7 +319,12 @@ function KPICard({ icon, label, value, change, trend, color }: any) {
     );
 }
 
-function MetricBox({ label, value, icon, highlight }: any) {
+function MetricBox({ label, value, icon, highlight }: {
+    label: string;
+    value: string;
+    icon: React.ReactNode;
+    highlight?: boolean;
+}) {
     return (
         <div className={`p-6 ${highlight ? 'bg-blue-50' : ''}`}>
             <div className="flex items-center justify-center space-x-2 mb-2 text-gray-400">
@@ -324,7 +336,14 @@ function MetricBox({ label, value, icon, highlight }: any) {
     );
 }
 
-function QuickStat({ label, value, subtitle, max, current, color }: any) {
+function QuickStat({ label, value, subtitle, max, current, color }: {
+    label: string;
+    value: string;
+    subtitle?: string;
+    max?: number;
+    current?: number;
+    color?: string;
+}) {
     return (
         <div className="space-y-2">
             <div className="flex items-center justify-between">
@@ -332,7 +351,7 @@ function QuickStat({ label, value, subtitle, max, current, color }: any) {
                 <p className="text-sm font-black text-gray-900">{value}</p>
             </div>
             {subtitle && <p className="text-[10px] text-gray-400 font-semibold">{subtitle}</p>}
-            {max !== undefined && (
+            {max !== undefined && current !== undefined && (
                 <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                     <div className={`h-full bg-${color}-500 transition-all rounded-full`} style={{ width: `${Math.min((current / max) * 100, 100)}%` }}></div>
                 </div>
@@ -341,7 +360,15 @@ function QuickStat({ label, value, subtitle, max, current, color }: any) {
     );
 }
 
-function FunnelStep({ label, value, sub, width, opacity, percent, isFinal }: any) {
+function FunnelStep({ label, value, sub, width, opacity, percent, isFinal }: {
+    label: string;
+    value: string;
+    sub: string;
+    width: string;
+    opacity: string;
+    percent?: string;
+    isFinal?: boolean;
+}) {
     return (
         <div className="flex flex-col items-center group">
             <div className={`flex items-center justify-between px-8 py-6 rounded-2xl ${opacity} ${width} transition-all duration-500 hover:scale-[1.02] cursor-default border border-white/10`}>
