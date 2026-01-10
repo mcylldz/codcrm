@@ -5,14 +5,65 @@ import { revalidatePath } from 'next/cache';
 
 export async function updateOrder(id: string, data: any) {
     try {
-        const { error } = await supabaseAdmin
+        // 1. Get current order to check previous status and product
+        const { data: oldOrder, error: fetchError } = await supabaseAdmin
+            .from('orders')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (fetchError) throw fetchError;
+
+        // 2. Perform the update
+        const { error: updateError } = await supabaseAdmin
             .from('orders')
             .update(data)
             .eq('id', id);
 
-        if (error) throw error;
+        if (updateError) throw updateError;
+
+        // 3. Stock Management Logic
+        const oldStatus = oldOrder.status;
+        const newStatus = data.status || oldStatus;
+        const productName = (data.product || oldOrder.product || '').trim().toLowerCase();
+        const quantity = Number(data.package_id || oldOrder.package_id || 1);
+
+        // Fetch product case-insensitively
+        const { data: product } = await supabaseAdmin
+            .from('products')
+            .select('id, name, stock')
+            .ilike('name', productName)
+            .single();
+
+        if (product) {
+            let stockChange = 0;
+
+            // Transition To Confirmed: Decrease Stock
+            if (newStatus === 'teyit_alindi' && oldStatus !== 'teyit_alindi') {
+                stockChange = -quantity;
+            }
+            // Transition From Confirmed: Revert Stock
+            else if (oldStatus === 'teyit_alindi' && newStatus !== 'teyit_alindi') {
+                stockChange = quantity;
+            }
+            // Quantity change in an already confirmed order
+            else if (oldStatus === 'teyit_alindi' && newStatus === 'teyit_alindi' && data.package_id) {
+                stockChange = Number(oldOrder.package_id) - Number(data.package_id);
+            }
+
+            if (stockChange !== 0) {
+                await supabaseAdmin
+                    .from('products')
+                    .update({ stock: (product.stock || 0) + stockChange })
+                    .eq('id', product.id);
+            }
+        }
+
         revalidatePath('/dashboard/sessions');
         revalidatePath('/dashboard/orders');
+        revalidatePath('/dashboard/inventory');
+        revalidatePath('/dashboard');
+
         return { success: true };
     } catch (error: any) {
         return { success: false, error: error.message };
@@ -100,6 +151,8 @@ export async function getAnalytics(filters: {
         query = query.lte('created_at', `${filters.endDate}T23:59:59.999Z`);
     }
     if (filters.products && filters.products.length > 0) {
+        // Handle products case-insensitively for filtering if needed
+        // For now, assume it comes from a list. 
         query = query.in('product', filters.products);
     }
 
@@ -109,8 +162,9 @@ export async function getAnalytics(filters: {
     const { data: productData, error: productError } = await supabaseAdmin.from('products').select('name, cost');
     if (productError) throw new Error(productError.message);
 
+    // BUILD CASE-INSENSITIVE COST MAP
     const costMap = productData.reduce((acc, p) => {
-        acc[p.name] = p.cost;
+        acc[p.name.toLowerCase().trim()] = Number(p.cost || 0);
         return acc;
     }, {} as Record<string, number>);
 
@@ -133,23 +187,29 @@ export async function getAnalytics(filters: {
     const productStatsMap: Record<string, any> = {};
 
     orders.forEach(order => {
+        const productKey = (order.product || '').toLowerCase().trim();
         const orderPrice = Number(order.total_price || 0);
-        const productCost = costMap[order.product] || 0;
+        const productCost = costMap[productKey] || 0;
         const totalOrderCost = productCost * (order.package_id || 1);
 
-        if (!productStatsMap[order.product]) {
-            productStatsMap[order.product] = {
-                name: order.product,
+        // Normalize name for display based on the product list if possible, or use order's text
+        const displayName = order.product || 'Bilinmeyen Ürün';
+
+        if (!productStatsMap[productKey]) {
+            productStatsMap[productKey] = {
+                name: displayName,
                 orders: 0,
                 confirmed: 0,
                 turnover: 0,
                 cost: 0,
             };
         }
-        productStatsMap[order.product].orders++;
-        productStatsMap[order.product].turnover += (order.status === 'teyit_alindi' ? orderPrice : 0);
-        productStatsMap[order.product].cost += (order.status === 'teyit_alindi' ? totalOrderCost : 0);
-        if (order.status === 'teyit_alindi') productStatsMap[order.product].confirmed++;
+        productStatsMap[productKey].orders++;
+        if (order.status === 'teyit_alindi') {
+            productStatsMap[productKey].turnover += orderPrice;
+            productStatsMap[productKey].cost += totalOrderCost;
+            productStatsMap[productKey].confirmed++;
+        }
 
         stats.grossTurnover += orderPrice;
         stats.totalCost += totalOrderCost;
