@@ -149,22 +149,30 @@ function calculateShippingCost(price: number) {
 async function getMetaInsights(filters: { startDate?: string; endDate?: string }, campaignCodes?: string[]) {
     try {
         const { data: settings } = await supabaseAdmin.from('meta_settings').select('*').single();
-        if (!settings?.access_token || !settings?.ad_account_id) return null;
+        if (!settings?.access_token || !settings?.ad_account_id) {
+            console.log('Meta API: Ayarlar eksik (Token veya Account ID yok)');
+            return null;
+        }
 
         const adAccountId = settings.ad_account_id.startsWith('act_') ? settings.ad_account_id : `act_${settings.ad_account_id}`;
 
-        let url = `https://graph.facebook.com/v18.0/${adAccountId}/insights?fields=spend,cpc,cpm,campaign_name,impressions,clicks&access_token=${settings.access_token}`;
+        const baseUrl = `https://graph.facebook.com/v18.0/${adAccountId}/insights`;
+        const params = new URLSearchParams({
+            fields: 'spend,cpc,cpm,campaign_name,impressions,clicks',
+            access_token: settings.access_token,
+            level: 'campaign'
+        });
 
         if (filters.startDate && filters.endDate) {
-            url += `&time_range={'since':'${filters.startDate}','until':'${filters.endDate}'}`;
-            url += `&time_increment=all`;
+            params.append('time_range', JSON.stringify({ since: filters.startDate, until: filters.endDate }));
         }
 
-        const res = await fetch(url + '&level=campaign');
+        const finalUrl = `${baseUrl}?${params.toString()}`;
+        const res = await fetch(finalUrl, { cache: 'no-store' });
         const json = await res.json();
 
         if (json.error) {
-            console.error('Meta API Error:', json.error);
+            console.error('Meta API Hatası:', json.error.message);
             return null;
         }
 
@@ -175,8 +183,13 @@ async function getMetaInsights(filters: { startDate?: string; endDate?: string }
         let cpmCount = 0;
 
         const data = json.data || [];
-        const filteredData = campaignCodes && campaignCodes.length > 0
-            ? data.filter((item: any) => campaignCodes.some(code => item.campaign_name.toLowerCase().includes(code.toLowerCase())))
+        const cleanCodes = (campaignCodes || []).map(c => c.trim().toLowerCase()).filter(c => c !== '');
+
+        const filteredData = cleanCodes.length > 0
+            ? data.filter((item: any) => {
+                const campaignName = (item.campaign_name || '').toLowerCase();
+                return cleanCodes.some(code => campaignName.includes(code));
+            })
             : data;
 
         filteredData.forEach((item: any) => {
@@ -191,7 +204,7 @@ async function getMetaInsights(filters: { startDate?: string; endDate?: string }
             cpm: cpmCount > 0 ? cpmSum / cpmCount : 0
         };
     } catch (e) {
-        console.error('Meta Fetch Error:', e);
+        console.error('Meta Fetch Hata:', e);
         return null;
     }
 }
