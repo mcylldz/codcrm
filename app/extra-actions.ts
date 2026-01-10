@@ -31,11 +31,14 @@ export async function deleteSupplier(id: string) {
 export async function createPurchase(data: any) {
     const { error } = await supabaseAdmin.from('purchases').insert({
         ...data,
-        status: 'yolda'
+        status: data.status || 'yolda'
     });
 
     if (error) return { success: false, error: error.message };
+
     revalidatePath('/dashboard/suppliers');
+    revalidatePath('/dashboard/inventory');
+    revalidatePath('/dashboard');
     return { success: true };
 }
 
