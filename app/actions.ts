@@ -188,7 +188,8 @@ async function getMetaInsights(filters: { startDate?: string; endDate?: string }
         const filteredData = cleanCodes.length > 0
             ? data.filter((item: any) => {
                 const campaignName = (item.campaign_name || '').toLowerCase();
-                return cleanCodes.some(code => campaignName.includes(code));
+                const campaignId = (item.id || item.campaign_id || '').toLowerCase(); // Meta uses 'id' inside data usually
+                return cleanCodes.some(code => campaignName.includes(code) || campaignId === code);
             })
             : data;
 
@@ -238,9 +239,8 @@ export async function getAnalytics(filters: {
     if (filters.products && filters.products.length > 0) {
         const selectedProdIds = productData.filter(p => filters.products!.includes(p.name)).map(p => p.id);
         codesToFilter = campaignData?.filter(c => selectedProdIds.includes(c.product_id)).map(c => c.campaign_code) || [];
-    } else {
-        codesToFilter = campaignData?.map(c => c.campaign_code) || [];
     }
+    // Note: if no products filter, codesToFilter remains empty, which triggers fetch for ALL campaigns in getMetaInsights
 
     const metaInsights = await getMetaInsights({ startDate: filters.startDate, endDate: filters.endDate }, codesToFilter);
 
