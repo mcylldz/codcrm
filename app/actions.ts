@@ -86,3 +86,99 @@ export async function getOrdersByDate(dateStr: string) {
     if (error) throw new Error(error.message);
     return data;
 }
+export async function getAnalytics(filters: {
+    startDate?: string;
+    endDate?: string;
+    products?: string[];
+}) {
+    let query = supabaseAdmin.from('orders').select('*');
+
+    if (filters.startDate) {
+        query = query.gte('created_at', `${filters.startDate}T00:00:00.000Z`);
+    }
+    if (filters.endDate) {
+        query = query.lte('created_at', `${filters.endDate}T23:59:59.999Z`);
+    }
+    if (filters.products && filters.products.length > 0) {
+        query = query.in('product', filters.products);
+    }
+
+    const { data: orders, error: ordersError } = await query;
+    if (ordersError) throw new Error(ordersError.message);
+
+    const { data: productData, error: productError } = await supabaseAdmin.from('products').select('name, cost');
+    if (productError) throw new Error(productError.message);
+
+    const costMap = productData.reduce((acc, p) => {
+        acc[p.name] = p.cost;
+        return acc;
+    }, {} as Record<string, number>);
+
+    const stats = {
+        totalOrders: orders.length,
+        statusCounts: {
+            teyit_bekleniyor: 0,
+            ulasilamadi: 0,
+            teyit_alindi: 0,
+            kabul_etmedi: 0,
+        },
+        grossTurnover: 0,
+        netTurnover: 0,
+        potentialTurnover: 0,
+        lostTurnover: 0,
+        totalCost: 0,
+        netCost: 0,
+    };
+
+    const productStatsMap: Record<string, any> = {};
+
+    orders.forEach(order => {
+        const orderPrice = Number(order.total_price || 0);
+        const productCost = costMap[order.product] || 0;
+        const totalOrderCost = productCost * (order.package_id || 1);
+
+        if (!productStatsMap[order.product]) {
+            productStatsMap[order.product] = {
+                name: order.product,
+                orders: 0,
+                confirmed: 0,
+                turnover: 0,
+                cost: 0,
+            };
+        }
+        productStatsMap[order.product].orders++;
+        productStatsMap[order.product].turnover += (order.status === 'teyit_alindi' ? orderPrice : 0);
+        productStatsMap[order.product].cost += (order.status === 'teyit_alindi' ? totalOrderCost : 0);
+        if (order.status === 'teyit_alindi') productStatsMap[order.product].confirmed++;
+
+        stats.grossTurnover += orderPrice;
+        stats.totalCost += totalOrderCost;
+
+        if (order.status === 'teyit_alindi') {
+            stats.statusCounts.teyit_alindi++;
+            stats.netTurnover += orderPrice;
+            stats.netCost += totalOrderCost;
+        } else if (order.status === 'teyit_bekleniyor') {
+            stats.statusCounts.teyit_bekleniyor++;
+            stats.potentialTurnover += orderPrice;
+        } else if (order.status === 'ulasilamadi') {
+            stats.statusCounts.ulasilamadi++;
+            stats.lostTurnover += orderPrice;
+        } else if (order.status === 'kabul_etmedi') {
+            stats.statusCounts.kabul_etmedi++;
+            stats.lostTurnover += orderPrice;
+        }
+    });
+
+    const netProfit = stats.netTurnover - stats.netCost;
+    const grossMargin = stats.netTurnover > 0 ? (netProfit / stats.netTurnover) * 100 : 0;
+
+    return {
+        ...stats,
+        netProfit,
+        grossMargin,
+        confirmedRate: stats.totalOrders > 0 ? (stats.statusCounts.teyit_alindi / stats.totalOrders) * 100 : 0,
+        rejectedRate: stats.totalOrders > 0 ? ((stats.statusCounts.ulasilamadi + stats.statusCounts.kabul_etmedi) / stats.totalOrders) * 100 : 0,
+        productStats: Object.values(productStatsMap).sort((a, b) => b.turnover - a.turnover),
+    };
+}
