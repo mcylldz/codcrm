@@ -346,20 +346,31 @@ export async function getAnalytics(filters: {
         const grossProfit = p.grossTurnover - p.grossCost;
         const currentStock = stockMap[p.id] || 0;
         const dailyVel = velocityMap[p.name.toLowerCase().trim()] || 0;
+
+        // Calculate actual units sold from package_id totals
+        const totalUnitsSold = orders?.filter(o =>
+            o.status === 'teyit_alindi' &&
+            (o.product || '').toLowerCase().trim() === p.name.toLowerCase().trim()
+        ).reduce((sum, o) => sum + (o.package_id || 1), 0) || 1;
+
         return {
             ...p,
             netProfit,
             grossProfit,
-            netProfitPerUnit: p.confirmed > 0 ? netProfit / p.confirmed : 0,
+            totalUnitsSold,
+            netProfitPerOrder: p.confirmed > 0 ? netProfit / p.confirmed : 0,
+            netProfitPerUnit: totalUnitsSold > 0 ? netProfit / totalUnitsSold : 0,
             grossCac: p.orders > 0 ? p.adSpend / p.orders : 0,
             netCac: p.confirmed > 0 ? p.adSpend / p.confirmed : 0,
             margin: p.netTurnover > 0 ? (netProfit / p.netTurnover) * 100 : 0,
-            stockDays: dailyVel > 0 ? Math.max(0, Math.floor(currentStock / dailyVel)) : Infinity
+            stockDays: dailyVel > 0 ? Math.max(0, Math.floor(currentStock / dailyVel)) : Infinity,
+            roas: p.adSpend > 0 ? p.netTurnover / p.adSpend : 0,
         };
     }).sort((a, b) => b.netTurnover - a.netTurnover);
 
     const netProfit = stats.netTurnover - stats.netCost - stats.totalShipping - stats.adSpend;
     const grossProfit = stats.grossTurnover - stats.totalCost;
+    const totalInvestment = stats.netCost + stats.totalShipping + stats.adSpend;
 
     return {
         ...stats,
@@ -369,5 +380,7 @@ export async function getAnalytics(filters: {
         convRate: stats.lpv > 0 ? (stats.totalOrders / stats.lpv) * 100 : 0,
         grossCac: stats.totalOrders > 0 ? stats.adSpend / stats.totalOrders : 0,
         netCac: stats.confirmedOrders > 0 ? stats.adSpend / stats.confirmedOrders : 0,
+        roas: stats.adSpend > 0 ? stats.netTurnover / stats.adSpend : 0,
+        roi: totalInvestment > 0 ? (netProfit / totalInvestment) * 100 : 0,
     };
 }
