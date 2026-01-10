@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { updateProduct, createProduct } from '@/app/inventory-actions';
-import { createPurchase, confirmPurchase } from '@/app/extra-actions';
+import { createPurchase, confirmPurchase, addProductCampaign, deleteProductCampaign } from '@/app/extra-actions';
 import {
     Plus,
     Save,
@@ -13,7 +13,9 @@ import {
     AlertTriangle,
     ArrowDownCircle,
     History,
-    Truck
+    Truck,
+    Tag,
+    Trash2
 } from 'lucide-react';
 
 export default function InventoryTable({ initialProducts, suppliers }: { initialProducts: any[], suppliers: any[] }) {
@@ -34,13 +36,15 @@ export default function InventoryTable({ initialProducts, suppliers }: { initial
         date: new Date().toISOString().split('T')[0]
     });
 
+    const [campaignDrawer, setCampaignDrawer] = useState<any>(null);
+    const [newCode, setNewCode] = useState('');
+
     const startEdit = (prod: any) => {
         setEditingId(prod.id);
         setEditForm({ ...prod });
     };
 
     const saveEdit = async () => {
-        // We only update cost here, as stock is calculated
         const res = await updateProduct(editingId!, { cost: editForm.cost });
         if (res.success) {
             setProducts(products.map(p => p.id === editingId ? { ...p, cost: editForm.cost } : p));
@@ -68,7 +72,6 @@ export default function InventoryTable({ initialProducts, suppliers }: { initial
 
         const total_price = (intakeForm.amount * intakeForm.unit_price) + intakeForm.shipping_cost;
 
-        // 1. Create Purchase
         const res = await createPurchase({
             ...intakeForm,
             total_price,
@@ -76,9 +79,6 @@ export default function InventoryTable({ initialProducts, suppliers }: { initial
         });
 
         if (res.success) {
-            // In a real app, we'd need the ID of the created purchase. 
-            // Since our createPurchase doesn't return ID easily and auto-revalidates, 
-            // a full reload is safer for this demo/stage.
             alert('Stok girişi kaydedildi. Sayfa yenileniyor...');
             window.location.reload();
         } else {
@@ -86,7 +86,21 @@ export default function InventoryTable({ initialProducts, suppliers }: { initial
         }
     };
 
-    const inputClass = "w-full border-2 border-gray-200 p-2.5 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-900 font-bold transition-all";
+    const handleAddCampaign = async () => {
+        if (!newCode) return;
+        const res = await addProductCampaign(campaignDrawer.id, newCode);
+        if (res.success) {
+            setNewCode('');
+            window.location.reload();
+        }
+    };
+
+    const handleDeleteCampaign = async (id: string) => {
+        const res = await deleteProductCampaign(id);
+        if (res.success) window.location.reload();
+    };
+
+    const inputClass = "w-full border-2 border-gray-100 p-2.5 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none text-gray-900 font-bold transition-all";
 
     return (
         <div className="space-y-6">
@@ -114,27 +128,16 @@ export default function InventoryTable({ initialProducts, suppliers }: { initial
                 </div>
             </div>
 
-            {/* NEW PRODUCT FORM */}
+            {/* QUICK FORMS (SAME AS BEFORE) */}
             {isAdding && (
                 <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200 flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 items-end animate-in fade-in slide-in-from-top-4">
                     <div className="flex-1 w-full">
                         <label className="block text-xs font-black text-gray-400 mb-1 uppercase tracking-widest">Ürün Adı</label>
-                        <input
-                            className={inputClass}
-                            value={newProduct.name}
-                            onChange={e => setNewProduct({ ...newProduct, name: e.target.value })}
-                            placeholder="Kafa Lambası v3"
-                        />
+                        <input className={inputClass} value={newProduct.name} onChange={e => setNewProduct({ ...newProduct, name: e.target.value })} placeholder="Kafa Lambası v3" />
                     </div>
                     <div className="w-full md:w-32">
                         <label className="block text-xs font-black text-gray-400 mb-1 uppercase tracking-widest">Maliyet (₺)</label>
-                        <input
-                            type="number"
-                            step="0.01"
-                            className={inputClass}
-                            value={newProduct.cost}
-                            onChange={e => setNewProduct({ ...newProduct, cost: parseFloat(e.target.value) })}
-                        />
+                        <input type="number" step="0.01" className={inputClass} value={newProduct.cost} onChange={e => setNewProduct({ ...newProduct, cost: parseFloat(e.target.value) })} />
                     </div>
                     <div className="flex space-x-2 w-full md:w-auto">
                         <button onClick={handleAdd} className="flex-1 bg-gray-900 text-white px-6 py-2.5 rounded-xl font-bold hover:bg-black transition-colors">Tanımla</button>
@@ -143,7 +146,6 @@ export default function InventoryTable({ initialProducts, suppliers }: { initial
                 </div>
             )}
 
-            {/* QUICK INTAKE FORM */}
             {isIntaking && (
                 <div className="bg-blue-50 p-8 rounded-3xl border border-blue-100 space-y-6 shadow-sm animate-in fade-in slide-in-from-top-4">
                     <div className="flex items-center space-x-2 text-blue-800">
@@ -194,8 +196,9 @@ export default function InventoryTable({ initialProducts, suppliers }: { initial
                         <thead className="bg-gray-50 uppercase text-[10px] font-black text-gray-400 tracking-widest">
                             <tr>
                                 <th className="px-8 py-5 text-left">Ürün Bilgisi</th>
-                                <th className="px-8 py-5 text-center">Toplam Alınan</th>
-                                <th className="px-8 py-5 text-center">Toplam Satılan</th>
+                                <th className="px-8 py-5 text-center">Kampanya Kodları</th>
+                                <th className="px-8 py-5 text-center">T. Alınan</th>
+                                <th className="px-8 py-5 text-center">T. Satılan</th>
                                 <th className="px-8 py-5 text-center">Mevcut Stok</th>
                                 <th className="px-8 py-5 text-left">Birim Maliyet</th>
                                 <th className="px-8 py-5 text-right">İşlem</th>
@@ -211,6 +214,15 @@ export default function InventoryTable({ initialProducts, suppliers }: { initial
                                             </div>
                                             <span className="font-black text-gray-900 text-sm tracking-tight">{prod.name}</span>
                                         </div>
+                                    </td>
+                                    <td className="px-8 py-5 text-center whitespace-nowrap">
+                                        <button
+                                            onClick={() => setCampaignDrawer(prod)}
+                                            className="flex items-center space-x-1.5 mx-auto bg-gray-50 px-3 py-1.5 rounded-xl border border-gray-100 text-[10px] font-black text-gray-500 hover:bg-blue-50 hover:text-blue-600 transition-all uppercase tracking-widest shadow-sm"
+                                        >
+                                            <Tag size={12} />
+                                            <span>Kodları Yönet ({prod.campaigns?.length || 0})</span>
+                                        </button>
                                     </td>
                                     <td className="px-8 py-5 text-center whitespace-nowrap">
                                         <span className="text-sm font-bold text-gray-600">{prod.totalPurchased || 0}</span>
@@ -239,7 +251,7 @@ export default function InventoryTable({ initialProducts, suppliers }: { initial
                                             </div>
                                         )}
                                     </td>
-                                    <td className="px-8 py-5 whitespace-nowrap text-right">
+                                    <td className="px-8 py-5 text-right">
                                         {editingId === prod.id ? (
                                             <div className="flex justify-end space-x-2">
                                                 <button onClick={saveEdit} className="p-2 bg-green-600 text-white rounded-xl hover:bg-green-700 shadow-md transition-all"><Save size={18} /></button>
@@ -253,28 +265,63 @@ export default function InventoryTable({ initialProducts, suppliers }: { initial
                                     </td>
                                 </tr>
                             ))}
-                            {products.length === 0 && (
-                                <tr>
-                                    <td colSpan={6} className="px-8 py-12 text-center text-gray-400 font-bold italic">Tanımlı ürün bulunamadı.</td>
-                                </tr>
-                            )}
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            <div className="flex items-start space-x-3 bg-orange-50 p-6 rounded-3xl border border-orange-100">
-                <div className="bg-orange-200 p-2 rounded-xl text-orange-700">
-                    <History size={20} />
+            {/* CAMPAIGN CODES DRAWER / MODAL */}
+            {campaignDrawer && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+                        <div className="bg-gray-900 p-8 text-white flex justify-between items-center">
+                            <div className="flex items-center space-x-3">
+                                <Tag className="text-blue-400" />
+                                <h3 className="text-xl font-black uppercase tracking-tight">Kampanya Kodları</h3>
+                            </div>
+                            <button onClick={() => setCampaignDrawer(null)} className="p-2 hover:bg-white/10 rounded-full transition-colors">
+                                <X size={24} />
+                            </button>
+                        </div>
+                        <div className="p-8 space-y-8">
+                            <div className="flex items-center space-x-2">
+                                <input
+                                    className={inputClass}
+                                    placeholder="Kampanya Kodu (Örn: tabanlik_pro_reklam)"
+                                    value={newCode}
+                                    onChange={e => setNewCode(e.target.value)}
+                                />
+                                <button
+                                    onClick={handleAddCampaign}
+                                    className="bg-blue-600 text-white p-3.5 rounded-2xl hover:bg-blue-700 transition-all shadow-lg active:scale-95"
+                                >
+                                    <Plus size={24} />
+                                </button>
+                            </div>
+
+                            <div className="space-y-4">
+                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Mevcut Kodlar</h4>
+                                <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
+                                    {campaignDrawer.campaigns?.map((c: any) => (
+                                        <div key={c.id} className="flex justify-between items-center bg-gray-50 p-4 rounded-2xl border border-gray-100 group">
+                                            <span className="font-bold text-gray-700">{c.campaign_code}</span>
+                                            <button
+                                                onClick={() => handleDeleteCampaign(c.id)}
+                                                className="text-gray-300 hover:text-red-500 transition-colors p-1"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {campaignDrawer.campaigns?.length === 0 && (
+                                        <p className="text-sm font-bold text-gray-400 italic">Henüz kod eklenmemiş.</p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div className="space-y-1">
-                    <h4 className="text-sm font-black text-orange-900 uppercase">Stok Nasıl Hesaplanır?</h4>
-                    <p className="text-xs text-orange-700 font-medium leading-relaxed">
-                        Mevcut stok her zaman <strong>"Toplam Gelen"</strong> (Onaylı Ticaretler) eksi <strong>"Toplam Satılan"</strong> (Teyitli Siparişler) formülüyle hesaplanır.
-                        Bu sayede geçmişe yönelik girilen tüm veriler stok durumuna anında yansır.
-                    </p>
-                </div>
-            </div>
+            )}
         </div>
     );
 }

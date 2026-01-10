@@ -31,14 +31,18 @@ export default async function InventoryPage() {
         salesMap[key] = (salesMap[key] || 0) + (o.package_id || 1);
     });
 
+    const { data: campaigns } = await supabaseAdmin.from('product_campaigns').select('*');
+
     const productsWithStats = products?.map(p => {
         const totalPurchased = purchaseMap[p.id] || 0;
         const totalSold = salesMap[p.name.toLowerCase().trim()] || 0;
+        const productCampaigns = campaigns?.filter(c => c.product_id === p.id) || [];
         return {
             ...p,
             totalPurchased,
             totalSold,
-            calculatedStock: totalPurchased - totalSold
+            calculatedStock: totalPurchased - totalSold,
+            campaigns: productCampaigns
         };
     });
 

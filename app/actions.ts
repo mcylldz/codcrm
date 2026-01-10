@@ -137,6 +137,65 @@ export async function getOrdersByDate(dateStr: string) {
     if (error) throw new Error(error.message);
     return data;
 }
+function calculateShippingCost(price: number) {
+    if (price <= 500) return 150;
+    if (price <= 1250) return 185;
+    if (price <= 2500) return 220;
+    if (price <= 3750) return 270;
+    if (price <= 5000) return 310;
+    return 310;
+}
+
+async function getMetaInsights(filters: { startDate?: string; endDate?: string }, campaignCodes?: string[]) {
+    try {
+        const { data: settings } = await supabaseAdmin.from('meta_settings').select('*').single();
+        if (!settings?.access_token || !settings?.ad_account_id) return null;
+
+        const adAccountId = settings.ad_account_id.startsWith('act_') ? settings.ad_account_id : `act_${settings.ad_account_id}`;
+
+        let url = `https://graph.facebook.com/v18.0/${adAccountId}/insights?fields=spend,cpc,cpm,campaign_name,impressions,clicks&access_token=${settings.access_token}`;
+
+        if (filters.startDate && filters.endDate) {
+            url += `&time_range={'since':'${filters.startDate}','until':'${filters.endDate}'}`;
+            url += `&time_increment=all`;
+        }
+
+        const res = await fetch(url + '&level=campaign');
+        const json = await res.json();
+
+        if (json.error) {
+            console.error('Meta API Error:', json.error);
+            return null;
+        }
+
+        let spend = 0;
+        let cpcSum = 0;
+        let cpcCount = 0;
+        let cpmSum = 0;
+        let cpmCount = 0;
+
+        const data = json.data || [];
+        const filteredData = campaignCodes && campaignCodes.length > 0
+            ? data.filter((item: any) => campaignCodes.some(code => item.campaign_name.toLowerCase().includes(code.toLowerCase())))
+            : data;
+
+        filteredData.forEach((item: any) => {
+            spend += Number(item.spend || 0);
+            if (item.cpc) { cpcSum += Number(item.cpc); cpcCount++; }
+            if (item.cpm) { cpmSum += Number(item.cpm); cpmCount++; }
+        });
+
+        return {
+            spend,
+            cpc: cpcCount > 0 ? cpcSum / cpcCount : 0,
+            cpm: cpmCount > 0 ? cpmSum / cpmCount : 0
+        };
+    } catch (e) {
+        console.error('Meta Fetch Error:', e);
+        return null;
+    }
+}
+
 export async function getAnalytics(filters: {
     startDate?: string;
     endDate?: string;
@@ -151,18 +210,27 @@ export async function getAnalytics(filters: {
         query = query.lte('created_at', `${filters.endDate}T23:59:59.999Z`);
     }
     if (filters.products && filters.products.length > 0) {
-        // Handle products case-insensitively for filtering if needed
-        // For now, assume it comes from a list. 
         query = query.in('product', filters.products);
     }
 
     const { data: orders, error: ordersError } = await query;
     if (ordersError) throw new Error(ordersError.message);
 
-    const { data: productData, error: productError } = await supabaseAdmin.from('products').select('name, cost');
+    const { data: productData, error: productError } = await supabaseAdmin.from('products').select('id, name, cost');
     if (productError) throw new Error(productError.message);
 
-    // BUILD CASE-INSENSITIVE COST MAP
+    const { data: campaignData } = await supabaseAdmin.from('product_campaigns').select('*');
+
+    let codesToFilter: string[] = [];
+    if (filters.products && filters.products.length > 0) {
+        const selectedProdIds = productData.filter(p => filters.products!.includes(p.name)).map(p => p.id);
+        codesToFilter = campaignData?.filter(c => selectedProdIds.includes(c.product_id)).map(c => c.campaign_code) || [];
+    } else {
+        codesToFilter = campaignData?.map(c => c.campaign_code) || [];
+    }
+
+    const metaInsights = await getMetaInsights({ startDate: filters.startDate, endDate: filters.endDate }, codesToFilter);
+
     const costMap = productData.reduce((acc, p) => {
         acc[p.name.toLowerCase().trim()] = Number(p.cost || 0);
         return acc;
@@ -182,6 +250,10 @@ export async function getAnalytics(filters: {
         lostTurnover: 0,
         totalCost: 0,
         netCost: 0,
+        totalShipping: 0,
+        adSpend: metaInsights?.spend || 0,
+        cpc: metaInsights?.cpc || 0,
+        cpm: metaInsights?.cpm || 0
     };
 
     const productStatsMap: Record<string, any> = {};
@@ -192,7 +264,6 @@ export async function getAnalytics(filters: {
         const productCost = costMap[productKey] || 0;
         const totalOrderCost = productCost * (order.package_id || 1);
 
-        // Normalize name for display based on the product list if possible, or use order's text
         const displayName = order.product || 'Bilinmeyen Ürün';
 
         if (!productStatsMap[productKey]) {
@@ -202,22 +273,22 @@ export async function getAnalytics(filters: {
                 confirmed: 0,
                 turnover: 0,
                 cost: 0,
+                shipping: 0
             };
         }
         productStatsMap[productKey].orders++;
+
         if (order.status === 'teyit_alindi') {
+            const shipCost = calculateShippingCost(orderPrice);
             productStatsMap[productKey].turnover += orderPrice;
             productStatsMap[productKey].cost += totalOrderCost;
+            productStatsMap[productKey].shipping += shipCost;
             productStatsMap[productKey].confirmed++;
-        }
 
-        stats.grossTurnover += orderPrice;
-        stats.totalCost += totalOrderCost;
-
-        if (order.status === 'teyit_alindi') {
-            stats.statusCounts.teyit_alindi++;
             stats.netTurnover += orderPrice;
             stats.netCost += totalOrderCost;
+            stats.totalShipping += shipCost;
+            stats.statusCounts.teyit_alindi++;
         } else if (order.status === 'teyit_bekleniyor') {
             stats.statusCounts.teyit_bekleniyor++;
             stats.potentialTurnover += orderPrice;
@@ -228,9 +299,12 @@ export async function getAnalytics(filters: {
             stats.statusCounts.kabul_etmedi++;
             stats.lostTurnover += orderPrice;
         }
+
+        stats.grossTurnover += orderPrice;
+        stats.totalCost += totalOrderCost;
     });
 
-    const netProfit = stats.netTurnover - stats.netCost;
+    const netProfit = stats.netTurnover - stats.netCost - stats.totalShipping - stats.adSpend;
     const grossMargin = stats.netTurnover > 0 ? (netProfit / stats.netTurnover) * 100 : 0;
 
     return {

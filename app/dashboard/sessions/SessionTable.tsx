@@ -51,7 +51,14 @@ export default function SessionTable({ initialOrders }: { initialOrders: any[] }
     };
 
     const exportExcel = () => {
-        const rows = orders.map(order => ({
+        const confirmedOrders = orders.filter(o => o.status === 'teyit_alindi');
+
+        if (confirmedOrders.length === 0) {
+            alert('Henüz teyit alınmış (Onaylanmış) sipariş bulunamadı.');
+            return;
+        }
+
+        const rows = confirmedOrders.map(order => ({
             'HEDEF KODU': '',
             'MÜŞTERİ BARKODU': '',
             'ADI SOYADI': (order.name + ' ' + order.surname).trim(),
@@ -118,9 +125,9 @@ export default function SessionTable({ initialOrders }: { initialOrders: any[] }
                                             value={isEditing ? editForm.status : order.status}
                                             onChange={(e) => isEditing ? setEditForm({ ...editForm, status: e.target.value }) : handleStatusChange(order.id, e.target.value)}
                                             className={`border rounded-lg px-2 py-1 text-xs font-bold focus:ring-2 focus:ring-blue-500 outline-none ${(isEditing ? editForm.status : order.status) === 'teyit_alindi' ? 'text-green-700 bg-green-50 border-green-200' :
-                                                    (isEditing ? editForm.status : order.status) === 'ulasilamadi' ? 'text-orange-700 bg-orange-50 border-orange-200' :
-                                                        (isEditing ? editForm.status : order.status) === 'kabul_etmedi' ? 'text-red-700 bg-red-50 border-red-200' :
-                                                            'text-blue-700 bg-blue-50 border-blue-200'
+                                                (isEditing ? editForm.status : order.status) === 'ulasilamadi' ? 'text-orange-700 bg-orange-50 border-orange-200' :
+                                                    (isEditing ? editForm.status : order.status) === 'kabul_etmedi' ? 'text-red-700 bg-red-50 border-red-200' :
+                                                        'text-blue-700 bg-blue-50 border-blue-200'
                                                 }`}
                                         >
                                             {statusOptions.map(opt => <option key={opt} value={opt}>{getStatusLabel(opt)}</option>)}

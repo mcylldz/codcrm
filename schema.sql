@@ -82,3 +82,23 @@ alter table products enable row level security;
 alter table suppliers enable row level security;
 alter table purchases enable row level security;
 alter table webhook_sources enable row level security;
+
+-- 7. Meta Settings (NEW)
+create table meta_settings (
+  id uuid default uuid_generate_v4() primary key,
+  access_token text,
+  business_id text,
+  ad_account_id text,
+  updated_at timestamp with time zone default timezone('utc'::text, now())
+);
+
+-- 8. Product Campaigns (NEW)
+create table product_campaigns (
+  id uuid default uuid_generate_v4() primary key,
+  product_id uuid references products(id) on delete cascade,
+  campaign_code text not null,
+  created_at timestamp with time zone default timezone('utc'::text, now())
+);
+
+alter table meta_settings enable row level security;
+alter table product_campaigns enable row level security;

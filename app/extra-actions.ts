@@ -107,3 +107,40 @@ export async function deleteWebhookSource(id: string) {
     revalidatePath('/dashboard/webhooks');
     return { success: true };
 }
+
+// Meta Settings
+export async function getMetaSettings() {
+    const { data } = await supabaseAdmin.from('meta_settings').select('*').single();
+    return data;
+}
+
+export async function updateMetaSettings(data: { access_token: string, business_id: string, ad_account_id: string }) {
+    const { data: existing } = await supabaseAdmin.from('meta_settings').select('id').single();
+
+    let res;
+    if (existing) {
+        res = await supabaseAdmin.from('meta_settings').update({ ...data, updated_at: new Date().toISOString() }).eq('id', existing.id);
+    } else {
+        res = await supabaseAdmin.from('meta_settings').insert(data);
+    }
+
+    if (res.error) return { success: false, error: res.error.message };
+    revalidatePath('/dashboard/webhooks');
+    return { success: true };
+}
+
+// Product Campaigns
+export async function addProductCampaign(productId: string, code: string) {
+    const { error } = await supabaseAdmin.from('product_campaigns').insert({ product_id: productId, campaign_code: code });
+    if (error) return { success: false, error: error.message };
+    revalidatePath('/dashboard/inventory');
+    return { success: true };
+}
+
+export async function deleteProductCampaign(id: string) {
+    const { error } = await supabaseAdmin.from('product_campaigns').delete().eq('id', id);
+    if (error) return { success: false, error: error.message };
+    revalidatePath('/dashboard/inventory');
+    return { success: true };
+}
+
