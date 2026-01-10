@@ -149,16 +149,13 @@ function calculateShippingCost(price: number) {
 async function getMetaInsights(filters: { startDate?: string; endDate?: string }, campaignCodes?: string[]) {
     try {
         const { data: settings } = await supabaseAdmin.from('meta_settings').select('*').single();
-        if (!settings?.access_token || !settings?.ad_account_id) {
-            console.log('Meta API: Ayarlar eksik (Token veya Account ID yok)');
-            return null;
-        }
+        if (!settings?.access_token || !settings?.ad_account_id) return null;
 
         const adAccountId = settings.ad_account_id.startsWith('act_') ? settings.ad_account_id : `act_${settings.ad_account_id}`;
 
         const baseUrl = `https://graph.facebook.com/v18.0/${adAccountId}/insights`;
         const params = new URLSearchParams({
-            fields: 'spend,cpc,cpm,campaign_name,impressions,clicks',
+            fields: 'spend,cpc,cpm,campaign_name,campaign_id,impressions,clicks,actions',
             access_token: settings.access_token,
             level: 'campaign'
         });
@@ -171,41 +168,59 @@ async function getMetaInsights(filters: { startDate?: string; endDate?: string }
         const res = await fetch(finalUrl, { cache: 'no-store' });
         const json = await res.json();
 
-        if (json.error) {
-            console.error('Meta API Hatası:', json.error.message);
-            return null;
-        }
+        if (json.error) return null;
 
         let spend = 0;
         let cpcSum = 0;
         let cpcCount = 0;
         let cpmSum = 0;
         let cpmCount = 0;
+        let landingPageViews = 0;
 
         const data = json.data || [];
         const cleanCodes = (campaignCodes || []).map(c => c.trim().toLowerCase()).filter(c => c !== '');
 
-        const filteredData = cleanCodes.length > 0
+        const filteredCampaigns = cleanCodes.length > 0
             ? data.filter((item: any) => {
                 const campaignName = (item.campaign_name || '').toLowerCase();
-                const campaignId = (item.id || item.campaign_id || '').toLowerCase(); // Meta uses 'id' inside data usually
+                const campaignId = (item.id || item.campaign_id || '').toLowerCase();
                 return cleanCodes.some(code => campaignName.includes(code) || campaignId === code);
             })
             : data;
 
-        filteredData.forEach((item: any) => {
-            spend += Number(item.spend || 0);
+        const campaignMap: Record<string, number> = {};
+
+        filteredCampaigns.forEach((item: any) => {
+            const itemSpend = Number(item.spend || 0);
+            spend += itemSpend;
+
+            if (cleanCodes.length > 0) {
+                const matchingCode = cleanCodes.find(code =>
+                    (item.campaign_name || '').toLowerCase().includes(code) ||
+                    (item.id || item.campaign_id || '').toLowerCase() === code
+                );
+                if (matchingCode) {
+                    campaignMap[matchingCode] = (campaignMap[matchingCode] || 0) + itemSpend;
+                }
+            }
+
             if (item.cpc) { cpcSum += Number(item.cpc); cpcCount++; }
             if (item.cpm) { cpmSum += Number(item.cpm); cpmCount++; }
+
+            if (item.actions) {
+                const lpv = item.actions.find((a: any) => a.action_type === 'landing_page_view');
+                if (lpv) landingPageViews += Number(lpv.value || 0);
+            }
         });
 
         return {
             spend,
             cpc: cpcCount > 0 ? cpcSum / cpcCount : 0,
-            cpm: cpmCount > 0 ? cpmSum / cpmCount : 0
+            cpm: cpmCount > 0 ? cpmSum / cpmCount : 0,
+            landingPageViews,
+            campaignMap
         };
     } catch (e) {
-        console.error('Meta Fetch Hata:', e);
         return null;
     }
 }
@@ -216,116 +231,143 @@ export async function getAnalytics(filters: {
     products?: string[];
 }) {
     let query = supabaseAdmin.from('orders').select('*');
+    if (filters.startDate) query = query.gte('created_at', `${filters.startDate}T00:00:00.000Z`);
+    if (filters.endDate) query = query.lte('created_at', `${filters.endDate}T23:59:59.999Z`);
+    if (filters.products && filters.products.length > 0) query = query.in('product', filters.products);
+    const { data: orders } = await query;
 
-    if (filters.startDate) {
-        query = query.gte('created_at', `${filters.startDate}T00:00:00.000Z`);
-    }
-    if (filters.endDate) {
-        query = query.lte('created_at', `${filters.endDate}T23:59:59.999Z`);
-    }
-    if (filters.products && filters.products.length > 0) {
-        query = query.in('product', filters.products);
-    }
+    const fourteenDaysAgo = new Date();
+    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+    const { data: historicalOrders } = await supabaseAdmin
+        .from('orders')
+        .select('product, package_id, created_at')
+        .eq('status', 'teyit_alindi')
+        .gte('created_at', fourteenDaysAgo.toISOString());
 
-    const { data: orders, error: ordersError } = await query;
-    if (ordersError) throw new Error(ordersError.message);
-
-    const { data: productData, error: productError } = await supabaseAdmin.from('products').select('id, name, cost');
-    if (productError) throw new Error(productError.message);
-
+    const { data: productData } = await supabaseAdmin.from('products').select('*');
     const { data: campaignData } = await supabaseAdmin.from('product_campaigns').select('*');
+    const { data: allPurchases } = await supabaseAdmin.from('purchases').select('product_id, amount').eq('status', 'stoga_girdi');
+    const { data: allSold } = await supabaseAdmin.from('orders').select('product, package_id').eq('status', 'teyit_alindi');
+
+    const stockMap: Record<string, number> = {};
+    productData?.forEach(p => {
+        const totalIn = allPurchases?.filter(pur => pur.product_id === p.id).reduce((sum, curr) => sum + (curr.amount || 0), 0) || 0;
+        const totalOut = allSold?.filter(s => (s.product || '').toLowerCase().trim() === p.name.toLowerCase().trim()).reduce((sum, curr) => sum + (curr.package_id || 1), 0) || 0;
+        stockMap[p.id] = totalIn - totalOut;
+    });
+
+    const velocityMap: Record<string, number> = {};
+    historicalOrders?.forEach(o => {
+        const key = (o.product || '').toLowerCase().trim();
+        velocityMap[key] = (velocityMap[key] || 0) + (o.package_id || 1);
+    });
+    Object.keys(velocityMap).forEach(k => velocityMap[k] = velocityMap[k] / 14);
 
     let codesToFilter: string[] = [];
     if (filters.products && filters.products.length > 0) {
-        const selectedProdIds = productData.filter(p => filters.products!.includes(p.name)).map(p => p.id);
+        const selectedProdIds = productData?.filter(p => filters.products!.includes(p.name)).map(p => p.id) || [];
         codesToFilter = campaignData?.filter(c => selectedProdIds.includes(c.product_id)).map(c => c.campaign_code) || [];
     }
-    // Note: if no products filter, codesToFilter remains empty, which triggers fetch for ALL campaigns in getMetaInsights
 
     const metaInsights = await getMetaInsights({ startDate: filters.startDate, endDate: filters.endDate }, codesToFilter);
 
-    const costMap = productData.reduce((acc, p) => {
-        acc[p.name.toLowerCase().trim()] = Number(p.cost || 0);
-        return acc;
-    }, {} as Record<string, number>);
-
     const stats = {
-        totalOrders: orders.length,
-        statusCounts: {
-            teyit_bekleniyor: 0,
-            ulasilamadi: 0,
-            teyit_alindi: 0,
-            kabul_etmedi: 0,
-        },
+        totalOrders: orders?.length || 0,
+        confirmedOrders: 0,
+        statusCounts: { teyit_bekleniyor: 0, ulasilamadi: 0, teyit_alindi: 0, kabul_etmedi: 0 },
         grossTurnover: 0,
         netTurnover: 0,
-        potentialTurnover: 0,
-        lostTurnover: 0,
         totalCost: 0,
         netCost: 0,
         totalShipping: 0,
         adSpend: metaInsights?.spend || 0,
         cpc: metaInsights?.cpc || 0,
-        cpm: metaInsights?.cpm || 0
+        cpm: metaInsights?.cpm || 0,
+        lpv: metaInsights?.landingPageViews || 0,
+        productStats: [] as any[]
     };
 
     const productStatsMap: Record<string, any> = {};
 
-    orders.forEach(order => {
+    orders?.forEach(order => {
+        const pData = productData?.find(p => p.name.toLowerCase().trim() === (order.product || '').toLowerCase().trim());
         const productKey = (order.product || '').toLowerCase().trim();
-        const orderPrice = Number(order.total_price || 0);
-        const productCost = costMap[productKey] || 0;
-        const totalOrderCost = productCost * (order.package_id || 1);
-
-        const displayName = order.product || 'Bilinmeyen Ürün';
+        const price = Number(order.total_price || 0);
+        const cost = Number(pData?.cost || 0) * (order.package_id || 1);
 
         if (!productStatsMap[productKey]) {
             productStatsMap[productKey] = {
-                name: displayName,
-                orders: 0,
-                confirmed: 0,
-                turnover: 0,
-                cost: 0,
-                shipping: 0
+                id: pData?.id,
+                name: order.product || 'Bilinmeyen',
+                orders: 0, confirmed: 0,
+                grossTurnover: 0, netTurnover: 0,
+                grossCost: 0, netCost: 0,
+                shipping: 0,
+                adSpend: 0
             };
         }
-        productStatsMap[productKey].orders++;
+
+        const pStat = productStatsMap[productKey];
+        pStat.orders++;
+        pStat.grossTurnover += price;
+        pStat.grossCost += cost;
+        stats.grossTurnover += price;
+        stats.totalCost += cost;
 
         if (order.status === 'teyit_alindi') {
-            const shipCost = calculateShippingCost(orderPrice);
-            productStatsMap[productKey].turnover += orderPrice;
-            productStatsMap[productKey].cost += totalOrderCost;
-            productStatsMap[productKey].shipping += shipCost;
-            productStatsMap[productKey].confirmed++;
+            const ship = calculateShippingCost(price);
+            pStat.confirmed++;
+            pStat.netTurnover += price;
+            pStat.netCost += cost;
+            pStat.shipping += ship;
 
-            stats.netTurnover += orderPrice;
-            stats.netCost += totalOrderCost;
-            stats.totalShipping += shipCost;
+            stats.confirmedOrders++;
+            stats.netTurnover += price;
+            stats.netCost += cost;
+            stats.totalShipping += ship;
             stats.statusCounts.teyit_alindi++;
-        } else if (order.status === 'teyit_bekleniyor') {
-            stats.statusCounts.teyit_bekleniyor++;
-            stats.potentialTurnover += orderPrice;
-        } else if (order.status === 'ulasilamadi') {
-            stats.statusCounts.ulasilamadi++;
-            stats.lostTurnover += orderPrice;
-        } else if (order.status === 'kabul_etmedi') {
-            stats.statusCounts.kabul_etmedi++;
-            stats.lostTurnover += orderPrice;
+        } else if (stats.statusCounts[order.status as keyof typeof stats.statusCounts] !== undefined) {
+            stats.statusCounts[order.status as keyof typeof stats.statusCounts]++;
         }
-
-        stats.grossTurnover += orderPrice;
-        stats.totalCost += totalOrderCost;
     });
 
+    if (metaInsights?.campaignMap) {
+        Object.keys(productStatsMap).forEach(pKey => {
+            const pId = productStatsMap[pKey].id;
+            const pCodes = campaignData?.filter(c => c.product_id === pId).map(c => c.campaign_code.toLowerCase()) || [];
+            pCodes.forEach(code => {
+                productStatsMap[pKey].adSpend += (metaInsights.campaignMap[code] || 0);
+            });
+        });
+    }
+
+    stats.productStats = Object.values(productStatsMap).map(p => {
+        const netProfit = p.netTurnover - p.netCost - p.shipping - p.adSpend;
+        const grossProfit = p.grossTurnover - p.grossCost;
+        const currentStock = stockMap[p.id] || 0;
+        const dailyVel = velocityMap[p.name.toLowerCase().trim()] || 0;
+        return {
+            ...p,
+            netProfit,
+            grossProfit,
+            netProfitPerUnit: p.confirmed > 0 ? netProfit / p.confirmed : 0,
+            grossCac: p.orders > 0 ? p.adSpend / p.orders : 0,
+            netCac: p.confirmed > 0 ? p.adSpend / p.confirmed : 0,
+            margin: p.netTurnover > 0 ? (netProfit / p.netTurnover) * 100 : 0,
+            stockDays: dailyVel > 0 ? Math.max(0, Math.floor(currentStock / dailyVel)) : Infinity
+        };
+    }).sort((a, b) => b.netTurnover - a.netTurnover);
+
     const netProfit = stats.netTurnover - stats.netCost - stats.totalShipping - stats.adSpend;
-    const grossMargin = stats.netTurnover > 0 ? (netProfit / stats.netTurnover) * 100 : 0;
+    const grossProfit = stats.grossTurnover - stats.totalCost;
 
     return {
         ...stats,
         netProfit,
-        grossMargin,
-        confirmedRate: stats.totalOrders > 0 ? (stats.statusCounts.teyit_alindi / stats.totalOrders) * 100 : 0,
-        rejectedRate: stats.totalOrders > 0 ? ((stats.statusCounts.ulasilamadi + stats.statusCounts.kabul_etmedi) / stats.totalOrders) * 100 : 0,
-        productStats: Object.values(productStatsMap).sort((a, b) => b.turnover - a.turnover),
+        grossProfit,
+        netMargin: stats.netTurnover > 0 ? (netProfit / stats.netTurnover) * 100 : 0,
+        convRate: stats.lpv > 0 ? (stats.totalOrders / stats.lpv) * 100 : 0,
+        grossCac: stats.totalOrders > 0 ? stats.adSpend / stats.totalOrders : 0,
+        netCac: stats.confirmedOrders > 0 ? stats.adSpend / stats.confirmedOrders : 0,
     };
 }

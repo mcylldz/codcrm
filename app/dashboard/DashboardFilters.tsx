@@ -8,8 +8,9 @@ export default function DashboardFilters({ products }: { products: any[] }) {
     const router = useRouter();
     const searchParams = useSearchParams();
 
-    const [startDate, setStartDate] = useState(searchParams.get('startDate') || '');
-    const [endDate, setEndDate] = useState(searchParams.get('endDate') || '');
+    const today = new Date().toISOString().split('T')[0];
+    const [startDate, setStartDate] = useState(searchParams.get('startDate') || today);
+    const [endDate, setEndDate] = useState(searchParams.get('endDate') || today);
     const [selectedProducts, setSelectedProducts] = useState<string[]>(searchParams.getAll('product') || []);
 
     const applyFilters = () => {
@@ -82,8 +83,8 @@ export default function DashboardFilters({ products }: { products: any[] }) {
                                 key={p.id}
                                 onClick={() => toggleProduct(p.name)}
                                 className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${selectedProducts.includes(p.name)
-                                        ? 'bg-blue-600 border-blue-600 text-white shadow-md'
-                                        : 'bg-white border-gray-200 text-gray-500 hover:border-blue-400'
+                                    ? 'bg-blue-600 border-blue-600 text-white shadow-md'
+                                    : 'bg-white border-gray-200 text-gray-500 hover:border-blue-400'
                                     }`}
                             >
                                 {p.name}
