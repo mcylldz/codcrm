@@ -18,7 +18,8 @@ import {
     Zap,
     Award,
     TrendingDown,
-    Package
+    Package,
+    XSquare
 } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -105,7 +106,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                     <KPICard
                         icon={<Percent size={20} />}
                         label="ROI"
-                        value={`%${stats.roi.toFixed(1)}`}
+                        value={`%${stats.roi.toFixed(1)} / ${(1 + stats.roi / 100).toFixed(2)}x`}
                         change="Return on Investment"
                         trend={stats.roi >= 50 ? "up" : "down"}
                         color="teal"
@@ -118,6 +119,44 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                         trend={stats.netCac < 70 ? "up" : "down"}
                         color="pink"
                     />
+                </div>
+
+                {/* Order Status Metrics */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                    <h3 className="font-black text-gray-900 text-sm uppercase tracking-wider mb-6 flex items-center">
+                        <BarChart3 size={16} className="mr-2 text-blue-600" />
+                        Sipariş Durumu Analizi
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                        <StatusMetric
+                            label="Toplam Sipariş"
+                            value={stats.totalOrders}
+                            percentage={100}
+                            color="blue"
+                            icon={<ShoppingBag size={16} />}
+                        />
+                        <StatusMetric
+                            label="Teyit Alındı"
+                            value={stats.statusCounts.teyit_alindi}
+                            percentage={(stats.statusCounts.teyit_alindi / stats.totalOrders) * 100}
+                            color="green"
+                            icon={<CheckCircle2 size={16} />}
+                        />
+                        <StatusMetric
+                            label="Ulaşılamadı"
+                            value={stats.statusCounts.ulasilamadi}
+                            percentage={(stats.statusCounts.ulasilamadi / stats.totalOrders) * 100}
+                            color="orange"
+                            icon={<Clock size={16} />}
+                        />
+                        <StatusMetric
+                            label="Kabul Etmedi"
+                            value={stats.statusCounts.kabul_etmedi}
+                            percentage={(stats.statusCounts.kabul_etmedi / stats.totalOrders) * 100}
+                            color="red"
+                            icon={<XSquare size={16} />}
+                        />
+                    </div>
                 </div>
 
                 {/* Main Analytics Grid */}
@@ -356,6 +395,38 @@ function QuickStat({ label, value, subtitle, max, current, color }: {
                     <div className={`h-full bg-${color}-500 transition-all rounded-full`} style={{ width: `${Math.min((current / max) * 100, 100)}%` }}></div>
                 </div>
             )}
+        </div>
+    );
+}
+
+function StatusMetric({ label, value, percentage, color, icon }: {
+    label: string;
+    value: number;
+    percentage: number;
+    color: 'blue' | 'green' | 'orange' | 'red';
+    icon: React.ReactNode;
+}) {
+    const colorClasses = {
+        blue: { bg: 'bg-blue-50', text: 'text-blue-600', border: 'border-blue-200' },
+        green: { bg: 'bg-green-50', text: 'text-green-600', border: 'border-green-200' },
+        orange: { bg: 'bg-orange-50', text: 'text-orange-600', border: 'border-orange-200' },
+        red: { bg: 'bg-red-50', text: 'text-red-600', border: 'border-red-200' },
+    };
+
+    return (
+        <div className={`${colorClasses[color].bg} border ${colorClasses[color].border} rounded-xl p-4 space-y-3`}>
+            <div className="flex items-center justify-between">
+                <div className={`p-2 rounded-lg bg-white ${colorClasses[color].text}`}>
+                    {icon}
+                </div>
+                <span className={`text-xs font-black ${colorClasses[color].text} uppercase tracking-widest`}>
+                    %{percentage.toFixed(1)}
+                </span>
+            </div>
+            <div>
+                <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">{label}</p>
+                <p className={`text-3xl font-black ${colorClasses[color].text}`}>{value}</p>
+            </div>
         </div>
     );
 }

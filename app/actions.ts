@@ -236,13 +236,13 @@ export async function getAnalytics(filters: {
     if (filters.products && filters.products.length > 0) query = query.in('product', filters.products);
     const { data: orders } = await query;
 
-    const fourteenDaysAgo = new Date();
-    fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
+    const fourDaysAgo = new Date();
+    fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
     const { data: historicalOrders } = await supabaseAdmin
         .from('orders')
         .select('product, package_id, created_at')
         .eq('status', 'teyit_alindi')
-        .gte('created_at', fourteenDaysAgo.toISOString());
+        .gte('created_at', fourDaysAgo.toISOString());
 
     const { data: productData } = await supabaseAdmin.from('products').select('*');
     const { data: campaignData } = await supabaseAdmin.from('product_campaigns').select('*');
@@ -261,7 +261,7 @@ export async function getAnalytics(filters: {
         const key = (o.product || '').toLowerCase().trim();
         velocityMap[key] = (velocityMap[key] || 0) + (o.package_id || 1);
     });
-    Object.keys(velocityMap).forEach(k => velocityMap[k] = velocityMap[k] / 14);
+    Object.keys(velocityMap).forEach(k => velocityMap[k] = velocityMap[k] / 4);
 
     let codesToFilter: string[] = [];
     if (filters.products && filters.products.length > 0) {
