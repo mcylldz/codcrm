@@ -1,3 +1,5 @@
+'use client';
+
 import { useState } from 'react';
 import * as XLSX from 'xlsx';
 import { Upload, FileText, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
