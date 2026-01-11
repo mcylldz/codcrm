@@ -1,7 +1,7 @@
 import { getProducts, getOrders } from '@/app/actions';
 import SessionTable from './SessionTable';
-import { STATUS_MAP } from '@/lib/utils';
-import { Search } from 'lucide-react';
+import SessionFilters from './SessionFilters';
+import { PhoneCall } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,103 +9,53 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
     const products = await getProducts();
     const sParams = await searchParams;
 
-    const startDate = sParams.startDate || '';
-    const endDate = sParams.endDate || '';
-    const status = sParams.status || '';
-    const product = sParams.product || '';
+    const includeStatus = sParams.includeStatus ? (Array.isArray(sParams.includeStatus) ? sParams.includeStatus : [sParams.includeStatus]) : undefined;
+    const excludeStatus = sParams.excludeStatus ? (Array.isArray(sParams.excludeStatus) ? sParams.excludeStatus : [sParams.excludeStatus]) : undefined;
+    const includeProduct = sParams.includeProduct ? (Array.isArray(sParams.includeProduct) ? sParams.includeProduct : [sParams.includeProduct]) : undefined;
+    const excludeProduct = sParams.excludeProduct ? (Array.isArray(sParams.excludeProduct) ? sParams.excludeProduct : [sParams.excludeProduct]) : undefined;
 
-    // Only fetch if at least one filter is applied
-    let orders = [];
-    const isActive = startDate || endDate || status || product;
+    const filters = {
+        startDate: sParams.startDate,
+        endDate: sParams.endDate,
+        status: includeStatus,
+        excludeStatus: excludeStatus,
+        product: includeProduct,
+        excludeProduct: excludeProduct,
+    };
 
-    if (isActive) {
-        orders = await getOrders({
-            startDate: startDate,
-            endDate: endDate,
-            status: status ? [status] : undefined,
-            product: product ? [product] : undefined
-        });
-    }
+    const hasActiveFilter = sParams.startDate || sParams.endDate || includeStatus || excludeStatus || includeProduct || excludeProduct;
+    const orders = hasActiveFilter ? await getOrders(filters) : [];
 
     return (
-        <div className="space-y-8">
-            <div>
-                <h2 className="text-3xl font-extrabold text-gray-900">Teyit Seans Başlat</h2>
-                <p className="text-gray-500 mt-1 font-medium">Lütfen işlemek istediğiniz sipariş kriterlerini seçin.</p>
-            </div>
-
-            <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-200">
-                <form className="grid grid-cols-1 md:grid-cols-5 gap-6 items-end">
-                    <div className="space-y-2">
-                        <label className="text-sm font-bold text-gray-700">Başlangıç Tarihi</label>
-                        <input
-                            type="date"
-                            name="startDate"
-                            defaultValue={startDate}
-                            className="w-full border rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 font-medium"
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <label className="text-sm font-bold text-gray-700">Bitiş Tarihi</label>
-                        <input
-                            type="date"
-                            name="endDate"
-                            defaultValue={endDate}
-                            className="w-full border rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 font-medium"
-                        />
-                    </div>
-
-                    <div className="space-y-2">
-                        <label className="text-sm font-bold text-gray-700">Durum</label>
-                        <select
-                            name="status"
-                            defaultValue={status}
-                            className="w-full border rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 font-medium"
-                        >
-                            <option value="">Tümü</option>
-                            {Object.entries(STATUS_MAP).map(([key, label]) => (
-                                <option key={key} value={key}>{label}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div className="space-y-2">
-                        <label className="text-sm font-bold text-gray-700">Ürün</label>
-                        <select
-                            name="product"
-                            defaultValue={product}
-                            className="w-full border rounded-xl px-4 py-3 focus:ring-2 focus:ring-blue-500 outline-none text-gray-900 font-medium"
-                        >
-                            <option value="">Tümü</option>
-                            {products.map(p => (
-                                <option key={p.id} value={p.name}>{p.name}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <button
-                        type="submit"
-                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl flex items-center justify-center space-x-2 font-bold transition-all shadow-lg active:scale-95"
-                    >
-                        <Search size={20} />
-                        <span>Siparişleri Getir</span>
-                    </button>
-                </form>
-            </div>
-
-            {isActive ? (
-                <SessionTable initialOrders={orders || []} />
-            ) : (
-                <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl p-20 text-center space-y-4">
-                    <div className="bg-white p-4 rounded-full shadow-sm w-fit mx-auto">
-                        <Search size={40} className="text-gray-300" />
-                    </div>
-                    <div className="space-y-1">
-                        <h3 className="text-xl font-bold text-gray-800">Henüz Seçim Yapılmadı</h3>
-                        <p className="text-gray-500 font-medium">Siparişleri listelemek için yukarıdaki filtreleri kullanın.</p>
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-gray-50 pb-20">
+            {/* Header */}
+            <div className="bg-white border-b border-gray-200 sticky top-0 z-40 backdrop-blur-lg bg-white/95 shadow-sm">
+                <div className="max-w-[1800px] mx-auto px-6 py-6">
+                    <div className="flex items-center space-x-4">
+                        <div className="w-12 h-12 bg-gradient-to-br from-green-600 to-teal-600 rounded-2xl flex items-center justify-center shadow-lg">
+                            <PhoneCall className="text-white" size={24} />
+                        </div>
+                        <div>
+                            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Teyit Seansları</h1>
+                            <p className="text-sm text-gray-500 font-semibold">Sipariş filtreleme ve yönetim paneli</p>
+                        </div>
                     </div>
                 </div>
-            )}
+            </div>
+
+            <div className="max-w-[1800px] mx-auto px-6 py-8 space-y-8">
+                <SessionFilters products={products || []} />
+
+                {hasActiveFilter ? (
+                    <SessionTable orders={orders} />
+                ) : (
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center">
+                        <PhoneCall size={48} className="mx-auto text-gray-300 mb-4" />
+                        <h3 className="text-xl font-bold text-gray-900 mb-2">Filtre Uygulayın</h3>
+                        <p className="text-gray-500">Siparişleri görüntülemek için yukarıdaki filtrelerden en az birini seçin.</p>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

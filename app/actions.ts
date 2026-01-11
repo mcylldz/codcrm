@@ -70,6 +70,52 @@ export async function updateOrder(id: string, data: any) {
     }
 }
 
+export async function deleteOrder(id: string) {
+    try {
+        // 1. Get order details before deletion (for stock restoration)
+        const { data: order, error: fetchError } = await supabaseAdmin
+            .from('orders')
+            .select('*')
+            .eq('id', id)
+            .single();
+
+        if (fetchError) throw fetchError;
+
+        // 2. If order was confirmed, restore stock
+        if (order.status === 'teyit_alindi') {
+            const productName = (order.product || '').trim().toLowerCase();
+            const quantity = Number(order.package_id || 1);
+
+            const { data: product } = await supabaseAdmin
+                .from('products')
+                .select('id, name, stock')
+                .ilike('name', productName)
+                .single();
+
+            if (product) {
+                await supabaseAdmin
+                    .from('products')
+                    .update({ stock: product.stock + quantity })
+                    .eq('id', product.id);
+            }
+        }
+
+        // 3. Delete the order
+        const { error: deleteError } = await supabaseAdmin
+            .from('orders')
+            .delete()
+            .eq('id', id);
+
+        if (deleteError) throw deleteError;
+
+        revalidatePath('/teyit-seanslari');
+        return { success: true };
+    } catch (error: any) {
+        console.error('Error deleting order:', error);
+        return { success: false, error: error.message };
+    }
+}
+
 export async function getOrders(filters: {
     status?: string[];
     excludeStatus?: string[];
@@ -263,10 +309,14 @@ export async function getAnalytics(filters: {
     });
     Object.keys(velocityMap).forEach(k => velocityMap[k] = velocityMap[k] / 4);
 
+    // Always get campaign codes - either filtered by selected products or all codes
     let codesToFilter: string[] = [];
     if (filters.products && filters.products.length > 0) {
         const selectedProdIds = productData?.filter(p => filters.products!.includes(p.name)).map(p => p.id) || [];
         codesToFilter = campaignData?.filter(c => selectedProdIds.includes(c.product_id)).map(c => c.campaign_code) || [];
+    } else {
+        // No product filter = get all campaign codes
+        codesToFilter = campaignData?.map(c => c.campaign_code) || [];
     }
 
     const metaInsights = await getMetaInsights({ startDate: filters.startDate, endDate: filters.endDate }, codesToFilter);
