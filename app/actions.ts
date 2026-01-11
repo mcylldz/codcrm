@@ -116,6 +116,97 @@ export async function deleteOrder(id: string) {
     }
 }
 
+export async function processReturnsFromExcel(excelData: { phone: string; returnCost: number }[]) {
+    try {
+        const results = {
+            processed: 0,
+            notFound: 0,
+            errors: [] as string[],
+            details: [] as any[],
+        };
+
+        for (const item of excelData) {
+            try {
+                // Clean phone number (remove spaces, dashes, etc.)
+                const cleanPhone = item.phone.replace(/[\s-()]/g, '').trim();
+
+                // Find order by phone number
+                const { data: orders, error: searchError } = await supabaseAdmin
+                    .from('orders')
+                    .select('*')
+                    .eq('phone', cleanPhone)
+                    .eq('status', 'teyit_alindi'); // Only confirmed orders can be returned
+
+                if (searchError) {
+                    results.errors.push(`Search error for ${cleanPhone}: ${searchError.message}`);
+                    continue;
+                }
+
+                if (!orders || orders.length === 0) {
+                    results.notFound++;
+                    results.details.push({ phone: cleanPhone, status: 'not_found' });
+                    continue;
+                }
+
+                // Process each matching order
+                for (const order of orders) {
+                    // 1. Update order status and add return cost
+                    const { error: updateError } = await supabaseAdmin
+                        .from('orders')
+                        .update({
+                            status: 'iade_donduruldu',
+                            return_cost: item.returnCost,
+                            return_processed: true,
+                            return_date: new Date().toISOString(),
+                        })
+                        .eq('id', order.id);
+
+                    if (updateError) {
+                        results.errors.push(`Update error for order ${order.id}: ${updateError.message}`);
+                        continue;
+                    }
+
+                    // 2. Restore stock
+                    const productName = (order.product || '').trim().toLowerCase();
+                    const quantity = Number(order.package_id || 1);
+
+                    const { data: product } = await supabaseAdmin
+                        .from('products')
+                        .select('id, name, stock')
+                        .ilike('name', productName)
+                        .single();
+
+                    if (product) {
+                        await supabaseAdmin
+                            .from('products')
+                            .update({ stock: product.stock + quantity })
+                            .eq('id', product.id);
+                    }
+
+                    results.processed++;
+                    results.details.push({
+                        phone: cleanPhone,
+                        orderId: order.id,
+                        product: order.product,
+                        returnCost: item.returnCost,
+                        status: 'processed',
+                    });
+                }
+            } catch (err: any) {
+                results.errors.push(`Processing error: ${err.message}`);
+            }
+        }
+
+        revalidatePath('/dashboard');
+        revalidatePath('/dashboard/sessions');
+
+        return { success: true, results };
+    } catch (error: any) {
+        console.error('Error processing returns:', error);
+        return { success: false, error: error.message };
+    }
+}
+
 export async function getOrders(filters: {
     status?: string[];
     excludeStatus?: string[];
@@ -324,12 +415,14 @@ export async function getAnalytics(filters: {
     const stats = {
         totalOrders: orders?.length || 0,
         confirmedOrders: 0,
-        statusCounts: { teyit_bekleniyor: 0, ulasilamadi: 0, teyit_alindi: 0, kabul_etmedi: 0 },
+        returnedOrders: 0,
+        statusCounts: { teyit_bekleniyor: 0, ulasilamadi: 0, teyit_alindi: 0, kabul_etmedi: 0, iade_donduruldu: 0 },
         grossTurnover: 0,
         netTurnover: 0,
         totalCost: 0,
         netCost: 0,
         totalShipping: 0,
+        totalReturnCost: 0,
         adSpend: metaInsights?.spend || 0,
         cpc: metaInsights?.cpc || 0,
         cpm: metaInsights?.cpm || 0,
@@ -349,10 +442,11 @@ export async function getAnalytics(filters: {
             productStatsMap[productKey] = {
                 id: pData?.id,
                 name: order.product || 'Bilinmeyen',
-                orders: 0, confirmed: 0,
+                orders: 0, confirmed: 0, returned: 0,
                 grossTurnover: 0, netTurnover: 0,
                 grossCost: 0, netCost: 0,
                 shipping: 0,
+                returnCost: 0,
                 adSpend: 0
             };
         }
@@ -376,6 +470,21 @@ export async function getAnalytics(filters: {
             stats.netCost += cost;
             stats.totalShipping += ship;
             stats.statusCounts.teyit_alindi++;
+        } else if (order.status === 'iade_donduruldu') {
+            const returnCost = Number(order.return_cost || 0);
+            const ship = calculateShippingCost(price);
+            pStat.returned++;
+            pStat.returnCost += returnCost;
+            pStat.shipping += ship;
+            pStat.netTurnover -= price;
+            pStat.netCost -= cost;
+
+            stats.returnedOrders++;
+            stats.netTurnover -= price;
+            stats.netCost -= cost;
+            stats.totalShipping += ship;
+            stats.totalReturnCost += returnCost;
+            stats.statusCounts.iade_donduruldu++;
         } else if (stats.statusCounts[order.status as keyof typeof stats.statusCounts] !== undefined) {
             stats.statusCounts[order.status as keyof typeof stats.statusCounts]++;
         }
@@ -392,7 +501,7 @@ export async function getAnalytics(filters: {
     }
 
     stats.productStats = Object.values(productStatsMap).map(p => {
-        const netProfit = p.netTurnover - p.netCost - p.shipping - p.adSpend;
+        const netProfit = p.netTurnover - p.netCost - p.shipping - p.adSpend - p.returnCost;
         const grossProfit = p.grossTurnover - p.grossCost;
         const currentStock = stockMap[p.id] || 0;
         const dailyVel = velocityMap[p.name.toLowerCase().trim()] || 0;
@@ -403,11 +512,14 @@ export async function getAnalytics(filters: {
             (o.product || '').toLowerCase().trim() === p.name.toLowerCase().trim()
         ).reduce((sum, o) => sum + (o.package_id || 1), 0) || 1;
 
+        const returnRate = (p.returned / (p.confirmed + p.returned)) * 100 || 0;
+
         return {
             ...p,
             netProfit,
             grossProfit,
             totalUnitsSold,
+            returnRate,
             netProfitPerOrder: p.confirmed > 0 ? netProfit / p.confirmed : 0,
             netProfitPerUnit: totalUnitsSold > 0 ? netProfit / totalUnitsSold : 0,
             grossCac: p.orders > 0 ? p.adSpend / p.orders : 0,
@@ -418,14 +530,16 @@ export async function getAnalytics(filters: {
         };
     }).sort((a, b) => b.netTurnover - a.netTurnover);
 
-    const netProfit = stats.netTurnover - stats.netCost - stats.totalShipping - stats.adSpend;
+    const netProfit = stats.netTurnover - stats.netCost - stats.totalShipping - stats.adSpend - stats.totalReturnCost;
     const grossProfit = stats.grossTurnover - stats.totalCost;
-    const totalInvestment = stats.netCost + stats.totalShipping + stats.adSpend;
+    const totalInvestment = stats.netCost + stats.totalShipping + stats.adSpend + stats.totalReturnCost;
+    const returnRate = (stats.returnedOrders / (stats.confirmedOrders + stats.returnedOrders)) * 100 || 0;
 
     return {
         ...stats,
         netProfit,
         grossProfit,
+        returnRate,
         netMargin: stats.netTurnover > 0 ? (netProfit / stats.netTurnover) * 100 : 0,
         convRate: stats.lpv > 0 ? (stats.totalOrders / stats.lpv) * 100 : 0,
         grossCac: stats.totalOrders > 0 ? stats.adSpend / stats.totalOrders : 0,

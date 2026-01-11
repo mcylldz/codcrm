@@ -9,6 +9,7 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
     ulasilamadi: { label: 'Ulaşılamadı', color: 'bg-gray-100 text-gray-700 border-gray-200' },
     teyit_alindi: { label: 'Teyit Alındı', color: 'bg-green-100 text-green-700 border-green-200' },
     kabul_etmedi: { label: 'Kabul Etmedi', color: 'bg-red-100 text-red-700 border-red-200' },
+    iade_donduruldu: { label: 'İade Döndü', color: 'bg-purple-100 text-purple-700 border-purple-200' },
 };
 
 export default function SessionTable({ orders }: { orders: any[] }) {
@@ -82,7 +83,7 @@ export default function SessionTable({ orders }: { orders: any[] }) {
                                                 <User size={18} />
                                             </div>
                                             <div>
-                                                <p className="font-bold text-gray-900">{order.ad_soyad || 'İsimsiz'}</p>
+                                                <p className="font-bold text-gray-900">{order.name} {order.surname}</p>
                                                 <p className="text-[10px] text-gray-500 flex items-center">
                                                     <Calendar size={10} className="mr-1" />
                                                     {new Date(order.created_at).toLocaleString('tr-TR')}
@@ -91,14 +92,14 @@ export default function SessionTable({ orders }: { orders: any[] }) {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-center">
-                                        <PhoneZoom phone={order.telefon} />
+                                        <PhoneZoom phone={order.phone} />
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex items-start space-x-2 text-sm text-gray-700">
                                             <MapPin size={14} className="text-gray-400 mt-0.5 flex-shrink-0" />
                                             <div>
-                                                <p className="font-semibold">{order.il} / {order.ilce}</p>
-                                                <p className="text-xs text-gray-500 line-clamp-2">{order.adres}</p>
+                                                <p className="font-semibold">{order.city} / {order.district}</p>
+                                                <p className="text-xs text-gray-500 line-clamp-2">{order.address}</p>
                                             </div>
                                         </div>
                                     </td>

@@ -150,9 +150,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                             icon={<Clock size={16} />}
                         />
                         <StatusMetric
-                            label="Kabul Etmedi"
-                            value={stats.statusCounts.kabul_etmedi}
-                            percentage={(stats.statusCounts.kabul_etmedi / stats.totalOrders) * 100}
+                            label="İade Döndü"
+                            value={stats.statusCounts.iade_donduruldu}
+                            percentage={stats.returnRate}
                             color="red"
                             icon={<XSquare size={16} />}
                         />
