@@ -25,26 +25,26 @@ export default function ReturnUpload() {
                     const workbook = XLSX.read(data, { type: 'binary' });
                     const sheetName = workbook.SheetNames[0];
                     const sheet = workbook.Sheets[sheetName];
-                    const json: any[] = XLSX.utils.sheet_to_json(sheet);
+                    const json: any[] = XLSX.utils.sheet_to_json(sheet, { header: 'A' });
 
-                    // Map Excel data: D row (TELEFON) is usually index 3 or key "TELEFON"
-                    // User says D1: TELEFON, K1: IADE MALIYETI
-                    // sheet_to_json might use headers.
+                    // Map Excel data: D row (TELEFON), K row (IADE MALIYETI)
+                    const formattedData = json.slice(1).map(row => {
+                        const rawPhone = String(row['D'] || '').trim();
+                        // Normalize phone: remove non-digits, and leading 0/90
+                        let phone = rawPhone.replace(/\D/g, '');
+                        if (phone.startsWith('90')) phone = phone.substring(2);
+                        if (phone.startsWith('0')) phone = phone.substring(1);
 
-                    const formattedData = json.map(row => {
-                        // Attempt to find phone in column D (TELEFON) and cost in column K
-                        // XLSX.utils.sheet_to_json with headers uses header names
-                        const phone = row['TELEFON'] || row['phone'] || row['__EMPTY_3']; // __EMPTY_3 is column D if no headers 
-                        const returnCost = row['IADE MALIYETI'] || row['return_cost'] || row['__EMPTY_10']; // __EMPTY_10 is column K
+                        const returnCost = Number(row['K'] || 0);
 
                         return {
-                            phone: String(phone || ''),
-                            returnCost: Number(returnCost || 0)
+                            phone,
+                            returnCost
                         };
-                    }).filter(item => item.phone && item.phone.length > 5);
+                    }).filter(item => item.phone && item.phone.length >= 10);
 
                     if (formattedData.length === 0) {
-                        throw new Error('Excel dosyasında geçerli telefon numarası bulunamadı.');
+                        throw new Error('Excel dosyasında geçerli telefon numarası bulunamadı. Lütfen telefonların D sütununda, maliyetin K sütununda olduğundan emin olun.');
                     }
 
                     const res = await processReturnsFromExcel(formattedData);

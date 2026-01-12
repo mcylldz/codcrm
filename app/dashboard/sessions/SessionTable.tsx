@@ -1,8 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { updateOrder, deleteOrder } from '@/app/actions';
-import { Edit2, Trash2, Phone, MapPin, Package, User, Calendar, X, Check, AlertTriangle } from 'lucide-react';
+import { Edit2, Trash2, Phone, MapPin, Package, User, Calendar, X, Check, AlertTriangle, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
     teyit_bekleniyor: { label: 'Teyit Bekleniyor', color: 'bg-orange-100 text-orange-700 border-orange-200' },
@@ -12,10 +13,15 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
     iade_donduruldu: { label: 'İade Döndü', color: 'bg-purple-100 text-purple-700 border-purple-200' },
 };
 
-export default function SessionTable({ orders }: { orders: any[] }) {
+export default function SessionTable({ orders: initialOrders }: { orders: any[] }) {
+    const [localOrders, setLocalOrders] = useState<any[]>(initialOrders);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editData, setEditData] = useState<any>({});
     const [deletingId, setDeletingId] = useState<string | null>(null);
+
+    useEffect(() => {
+        setLocalOrders(initialOrders);
+    }, [initialOrders]);
 
     const handleEdit = (order: any) => {
         setEditingId(order.id);
@@ -29,23 +35,51 @@ export default function SessionTable({ orders }: { orders: any[] }) {
 
     const handleSave = async () => {
         if (!editingId) return;
-        await updateOrder(editingId, editData);
-        setEditingId(null);
-        window.location.reload();
+        const res = await updateOrder(editingId, editData);
+        if (res) {
+            // Update local state so it doesn't disappear if filter is active
+            setLocalOrders(prev => prev.map(o => o.id === editingId ? { ...o, ...editData } : o));
+            setEditingId(null);
+        }
     };
 
     const handleDelete = async () => {
         if (!deletingId) return;
         const result = await deleteOrder(deletingId);
         if (result.success) {
+            setLocalOrders(prev => prev.filter(o => o.id !== deletingId));
             setDeletingId(null);
-            window.location.reload();
         } else {
             alert('Silme işlemi başarısız: ' + result.error);
         }
     };
 
-    if (orders.length === 0) {
+    const exportToExcel = () => {
+        const confirmedOrders = localOrders.filter(o => o.status === 'teyit_alindi');
+        if (confirmedOrders.length === 0) {
+            alert('Dışa aktarılacak teyitli sipariş bulunamadı.');
+            return;
+        }
+
+        const exportData = confirmedOrders.map(o => ({
+            'AD SOYAD': `${o.name} ${o.surname}`,
+            'TELEFON': o.phone,
+            'ADRES': o.address,
+            'İL': o.city,
+            'İLÇE': o.district,
+            'ÜRÜN': o.product,
+            'PAKET': o.package_id,
+            'FİYAT': `${o.total_price} TL`,
+            'TARİH': new Date(o.created_at).toLocaleString('tr-TR')
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Teyitli Siparişler");
+        XLSX.writeFile(wb, `teyitli_siparisler_${new Date().toISOString().split('T')[0]}.xlsx`);
+    };
+
+    if (localOrders.length === 0) {
         return (
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-12 text-center">
                 <Package size={48} className="mx-auto text-gray-300 mb-4" />
@@ -57,9 +91,18 @@ export default function SessionTable({ orders }: { orders: any[] }) {
     return (
         <>
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-6 text-white">
-                    <h3 className="text-xl font-black">Sipariş Listesi</h3>
-                    <p className="text-sm text-gray-300 mt-1">{orders.length} Sipariş Bulundu</p>
+                <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-6 text-white flex justify-between items-center">
+                    <div>
+                        <h3 className="text-xl font-black text-white">Sipariş Listesi</h3>
+                        <p className="text-sm text-gray-300 mt-1">{localOrders.length} Sipariş Bulundu</p>
+                    </div>
+                    <button
+                        onClick={exportToExcel}
+                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-xl font-bold flex items-center space-x-2 transition shadow-lg"
+                    >
+                        <Download size={18} />
+                        <span>Teyitli Siparişleri İndir</span>
+                    </button>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="min-w-full">
@@ -75,7 +118,7 @@ export default function SessionTable({ orders }: { orders: any[] }) {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {orders.map((order) => (
+                            {localOrders.map((order: any) => (
                                 <tr key={order.id} className="hover:bg-blue-50/30 transition-colors group">
                                     <td className="px-6 py-4">
                                         <div className="flex items-center space-x-3">

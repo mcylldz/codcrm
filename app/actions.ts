@@ -130,11 +130,11 @@ export async function processReturnsFromExcel(excelData: { phone: string; return
                 // Clean phone number (remove spaces, dashes, etc.)
                 const cleanPhone = item.phone.replace(/[\s-()]/g, '').trim();
 
-                // Find order by phone number
+                // Find order by phone number (flexible matching for leading 0 or 90)
                 const { data: orders, error: searchError } = await supabaseAdmin
                     .from('orders')
                     .select('*')
-                    .eq('phone', cleanPhone)
+                    .ilike('phone', `%${item.phone}`)
                     .eq('status', 'teyit_alindi'); // Only confirmed orders can be returned
 
                 if (searchError) {
