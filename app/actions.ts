@@ -539,6 +539,7 @@ export async function getAnalytics(filters: {
             margin: p.netTurnover > 0 ? (netProfit / p.netTurnover) * 100 : 0,
             stockDays: dailyVel > 0 ? Math.max(0, Math.floor(currentStock / dailyVel)) : Infinity,
             roas: p.adSpend > 0 ? p.netTurnover / p.adSpend : 0,
+            potentialNetProfit: currentStock * (totalUnitsSold > 0 ? netProfit / totalUnitsSold : 0)
         };
     }).sort((a, b) => b.netTurnover - a.netTurnover);
 
@@ -558,5 +559,14 @@ export async function getAnalytics(filters: {
         netCac: stats.confirmedOrders > 0 ? stats.adSpend / stats.confirmedOrders : 0,
         roas: stats.adSpend > 0 ? stats.netTurnover / stats.adSpend : 0,
         roi: totalInvestment > 0 ? (netProfit / totalInvestment) * 100 : 0,
+        potentialNetProfit: Object.values(productStatsMap).reduce((sum, p) => {
+            const currentStock = stockMap[p.id] || 0;
+            const netProfit = p.netTurnover - p.netCost - p.shipping - p.adSpend - p.returnCost;
+            const totalUnitsSold = orders?.filter(o =>
+                o.status === 'teyit_alindi' &&
+                (o.product || '').toLowerCase().trim() === p.name.toLowerCase().trim()
+            ).reduce((s, o) => s + (o.package_id || 1), 0) || 0;
+            return sum + (currentStock * (totalUnitsSold > 0 ? netProfit / totalUnitsSold : 0));
+        }, 0)
     };
 }

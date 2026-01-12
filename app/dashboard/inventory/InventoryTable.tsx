@@ -208,6 +208,7 @@ export default function InventoryTable({ initialProducts, suppliers }: { initial
                                 <th className="px-8 py-5 text-center">T. Alınan</th>
                                 <th className="px-8 py-5 text-center">T. Satılan</th>
                                 <th className="px-8 py-5 text-center">Mevcut Stok</th>
+                                <th className="px-8 py-5 text-center">Potansiyel Kar</th>
                                 <th className="px-8 py-5 text-left">Birim Maliyet</th>
                                 <th className="px-8 py-5 text-right">İşlem</th>
                             </tr>
@@ -254,6 +255,14 @@ export default function InventoryTable({ initialProducts, suppliers }: { initial
                                                 {prod.calculatedStock}
                                             </span>
                                             {prod.calculatedStock < 10 && <AlertTriangle size={14} className="text-orange-500" />}
+                                        </div>
+                                    </td>
+                                    <td className="px-8 py-5 text-center whitespace-nowrap">
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-sm font-black text-blue-600">
+                                                {prod.potentialProfit > 0 ? `${prod.potentialProfit.toLocaleString('tr-TR')} ₺` : '0 ₺'}
+                                            </span>
+                                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tighter">Projeksiyon</span>
                                         </div>
                                     </td>
                                     <td className="px-8 py-5 whitespace-nowrap">

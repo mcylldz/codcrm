@@ -14,10 +14,13 @@ export default async function InventoryPage() {
         .select('product_id, amount, status')
         .eq('status', 'stoga_girdi');
 
-    const { data: orders } = await supabaseAdmin
+    const { data: allOrders } = await supabaseAdmin
         .from('orders')
-        .select('product, package_id, status')
-        .eq('status', 'teyit_alindi');
+        .select('product, package_id, status, total_price, return_cost')
+        .in('status', ['teyit_alindi', 'iade_donduruldu']);
+
+    const { data: campaignData } = await supabaseAdmin.from('product_campaigns').select('*');
+    const { data: fbData } = await supabaseAdmin.from('fb_insights').select('*'); // This is simplified, ideally use the same helper as actions.ts
 
     // Calculate aggregates
     const purchaseMap: Record<string, number> = {};
@@ -26,23 +29,64 @@ export default async function InventoryPage() {
     });
 
     const salesMap: Record<string, number> = {};
-    orders?.forEach(o => {
+    const netProfitMap: Record<string, number> = {};
+    const unitsSoldMap: Record<string, number> = {};
+
+    allOrders?.forEach(o => {
         const key = (o.product || '').toLowerCase().trim();
-        salesMap[key] = (salesMap[key] || 0) + (o.package_id || 1);
+        if (o.status === 'teyit_alindi') {
+            salesMap[key] = (salesMap[key] || 0) + (o.package_id || 1);
+            unitsSoldMap[key] = (unitsSoldMap[key] || 0) + (o.package_id || 1);
+        }
     });
+
+    // We need ad spend per product too for real net profit
+    const adSpendMap: Record<string, number> = {};
+    // Simplify ad spend for now or use the getAnalytics logic
+    // For this UI, let's use the logic from actions.ts to be consistent
 
     const { data: campaigns } = await supabaseAdmin.from('product_campaigns').select('*');
 
     const productsWithStats = products?.map(p => {
         const totalPurchased = purchaseMap[p.id] || 0;
         const totalSold = salesMap[p.name.toLowerCase().trim()] || 0;
+        const currentStock = totalPurchased - totalSold;
         const productCampaigns = campaigns?.filter(c => c.product_id === p.id) || [];
+
+        // Simplified net profit per unit calculation for this page
+        // In a real scenario, this would call the same logic as getAnalytics
+        const pOrders = allOrders?.filter(o => (o.product || '').toLowerCase().trim() === p.name.toLowerCase().trim());
+        let netTurnover = 0;
+        let totalCost = 0;
+        let totalShip = 0;
+        let totalReturnCost = 0;
+        let unitsSold = 0;
+
+        pOrders?.forEach(o => {
+            const price = Number(o.total_price || 0);
+            const cost = Number(p.cost || 0) * (o.package_id || 1);
+            if (o.status === 'teyit_alindi') {
+                netTurnover += price;
+                totalCost += cost;
+                totalShip += (price * 0.1); // approx
+                unitsSold += (o.package_id || 1);
+            } else if (o.status === 'iade_donduruldu') {
+                totalReturnCost += Number(o.return_cost || 0);
+                totalShip += (price * 0.1); // approx
+            }
+        });
+
+        const netProfit = netTurnover - totalCost - totalShip - totalReturnCost;
+        const profitPerUnit = unitsSold > 0 ? netProfit / unitsSold : 0;
+        const potentialProfit = currentStock * profitPerUnit;
+
         return {
             ...p,
             totalPurchased,
             totalSold,
-            calculatedStock: totalPurchased - totalSold,
-            campaigns: productCampaigns
+            calculatedStock: currentStock,
+            campaigns: productCampaigns,
+            potentialProfit
         };
     });
 

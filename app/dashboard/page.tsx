@@ -112,12 +112,12 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                         color="teal"
                     />
                     <KPICard
-                        icon={<Users size={20} />}
-                        label="Net CAC"
-                        value={`${stats.netCac.toFixed(2)} ₺`}
-                        change="Müşteri Maliyeti"
-                        trend={stats.netCac < 70 ? "up" : "down"}
-                        color="pink"
+                        icon={<Zap size={20} />}
+                        label="Potansiyel Kar"
+                        value={`${stats.potentialNetProfit.toLocaleString('tr-TR')} ₺`}
+                        change="Bekleyen Stok Karı"
+                        trend="up"
+                        color="yellow"
                     />
                 </div>
 
@@ -236,6 +236,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                                     <th className="px-6 py-4 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest">Sipariş Başı Kar</th>
                                     <th className="px-6 py-4 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest">Ürün Başı Kar</th>
                                     <th className="px-6 py-4 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest">Stok Ömrü</th>
+                                    <th className="px-6 py-4 text-center text-[10px] font-black text-gray-500 uppercase tracking-widest">Potansiyel</th>
                                     <th className="px-6 py-4 text-right text-[10px] font-black text-gray-500 uppercase tracking-widest">Net Kar</th>
                                 </tr>
                             </thead>
@@ -291,6 +292,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                                                 </span>
                                             )}
                                         </td>
+                                        <td className="px-6 py-4 text-center">
+                                            <div className="font-bold text-blue-600">{ps.potentialNetProfit.toLocaleString('tr-TR')} ₺</div>
+                                        </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="font-black text-gray-900 text-lg">{ps.netProfit.toLocaleString('tr-TR')} ₺</div>
                                         </td>
@@ -327,15 +331,16 @@ function KPICard({ icon, label, value, change, trend, color }: {
     value: string;
     change: string;
     trend: 'up' | 'down';
-    color: 'blue' | 'green' | 'purple' | 'orange' | 'teal' | 'pink';
+    color: 'blue' | 'green' | 'purple' | 'orange' | 'teal' | 'pink' | 'yellow';
 }) {
-    const colors: Record<'blue' | 'green' | 'purple' | 'orange' | 'teal' | 'pink', string> = {
+    const colors: Record<'blue' | 'green' | 'purple' | 'orange' | 'teal' | 'pink' | 'yellow', string> = {
         blue: 'from-blue-500 to-blue-600',
         green: 'from-green-500 to-green-600',
         purple: 'from-purple-500 to-purple-600',
         orange: 'from-orange-500 to-orange-600',
         teal: 'from-teal-500 to-teal-600',
         pink: 'from-pink-500 to-pink-600',
+        yellow: 'from-yellow-500 to-yellow-600',
     };
 
     return (
