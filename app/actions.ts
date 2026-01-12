@@ -429,6 +429,7 @@ export async function getAnalytics(filters: {
         grossTurnover: 0,
         netTurnover: 0,
         totalCost: 0,
+        costOfShippedOrders: 0,
         netCost: 0,
         totalShipping: 0,
         totalReturnCost: 0,
@@ -440,16 +441,25 @@ export async function getAnalytics(filters: {
     };
 
     const productStatsMap: Record<string, any> = {};
+    productData?.forEach(p => {
+        productStatsMap[p.name.toLowerCase().trim()] = {
+            id: p.id,
+            name: p.name,
+            orders: 0, confirmed: 0, returned: 0, returnedUnits: 0,
+            grossTurnover: 0, netTurnover: 0,
+            grossCost: 0, netCost: 0,
+            shipping: 0,
+            returnCost: 0,
+            adSpend: 0
+        };
+    });
 
     orders?.forEach(order => {
-        const pData = productData?.find(p => p.name.toLowerCase().trim() === (order.product || '').toLowerCase().trim());
         const productKey = (order.product || '').toLowerCase().trim();
-        const price = Number(order.total_price || 0);
-        const cost = Number(pData?.cost || 0) * (order.package_id || 1);
-
         if (!productStatsMap[productKey]) {
+            // Fallback for products not in the products table
             productStatsMap[productKey] = {
-                id: pData?.id,
+                id: null,
                 name: order.product || 'Bilinmeyen',
                 orders: 0, confirmed: 0, returned: 0, returnedUnits: 0,
                 grossTurnover: 0, netTurnover: 0,
@@ -459,8 +469,11 @@ export async function getAnalytics(filters: {
                 adSpend: 0
             };
         }
+        const pData = productData?.find(p => p.name.toLowerCase().trim() === productKey);
 
         const pStat = productStatsMap[productKey];
+        const price = Number(order.total_price || 0);
+        const cost = Number(pData?.cost || 0) * (order.package_id || 1);
         pStat.orders++;
         pStat.grossTurnover += price;
         pStat.grossCost += cost;
@@ -477,6 +490,7 @@ export async function getAnalytics(filters: {
             stats.confirmedOrders++;
             stats.netTurnover += price;
             stats.netCost += cost;
+            stats.costOfShippedOrders += cost;
             stats.totalShipping += ship;
             stats.statusCounts.teyit_alindi++;
         } else if (order.status === 'iade_donduruldu') {
@@ -487,13 +501,13 @@ export async function getAnalytics(filters: {
             pStat.returnedUnits += units;
             pStat.returnCost += returnCost;
             pStat.shipping += ship;
-            pStat.netTurnover -= price;
-            pStat.netCost -= cost;
+            // Note: netTurnover and netCost are for confirmed orders. 
+            // Returned orders stay in gross but don't add to net revenue.
+            // Their costs (product + ship + returnCost) are subtracted from Net Profit at the end.
 
             stats.returnedOrders++;
             stats.returnedUnits += units;
-            stats.netTurnover -= price;
-            stats.netCost -= cost;
+            stats.costOfShippedOrders += cost;
             stats.totalShipping += ship;
             stats.totalReturnCost += returnCost;
             stats.statusCounts.iade_donduruldu++;
@@ -543,7 +557,7 @@ export async function getAnalytics(filters: {
         };
     }).sort((a, b) => b.netTurnover - a.netTurnover);
 
-    const netProfit = stats.netTurnover - stats.netCost - stats.totalShipping - stats.adSpend - stats.totalReturnCost;
+    const netProfit = stats.netTurnover - stats.costOfShippedOrders - stats.totalShipping - stats.adSpend - stats.totalReturnCost;
     const grossProfit = stats.grossTurnover - stats.totalCost;
     const totalInvestment = stats.netCost + stats.totalShipping + stats.adSpend + stats.totalReturnCost;
     const returnRate = (stats.returnedOrders / (stats.confirmedOrders + stats.returnedOrders)) * 100 || 0;
