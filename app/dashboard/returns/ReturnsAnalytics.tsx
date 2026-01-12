@@ -13,14 +13,21 @@ export default function ReturnsAnalytics({ analytics }: { analytics: any }) {
                     label="Toplam İade"
                     value={analytics.returnedOrders}
                     icon={<RefreshCw className="text-purple-600" />}
-                    subValue={`${analytics.statusCounts.iade_donduruldu} Adet`}
+                    subValue="Toplam Sipariş Sayısı"
                     color="purple"
+                />
+                <StatCard
+                    label="İade Edilen Ürün"
+                    value={analytics.returnedUnits}
+                    icon={<Package className="text-blue-600" />}
+                    subValue="Toplam Paket Sayısı"
+                    color="blue"
                 />
                 <StatCard
                     label="İade Oranı"
                     value={`${analytics.returnRate.toFixed(1)}%`}
                     icon={<Percent className="text-orange-600" />}
-                    subValue="Toplam Teyitliye Oran"
+                    subValue="Onaylı Siparişlere Oranı"
                     color="orange"
                 />
                 <StatCard
@@ -29,13 +36,6 @@ export default function ReturnsAnalytics({ analytics }: { analytics: any }) {
                     icon={<TrendingDown className="text-red-600" />}
                     subValue="Ekstra Kargo & Zarar"
                     color="red"
-                />
-                <StatCard
-                    label="Net Zarar (İade Kaynaklı)"
-                    value={`${(analytics.totalReturnCost + (analytics.returnedOrders * 150)).toLocaleString('tr-TR')} ₺`}
-                    icon={<DollarSign className="text-gray-600" />}
-                    subValue="Tahmini Toplam Kayıp"
-                    color="gray"
                 />
             </div>
 
@@ -73,7 +73,10 @@ export default function ReturnsAnalytics({ analytics }: { analytics: any }) {
                                         <span className="font-bold text-green-600 bg-green-50 px-3 py-1 rounded-lg text-sm">{p.confirmed}</span>
                                     </td>
                                     <td className="px-8 py-5 text-center">
-                                        <span className="font-bold text-purple-600 bg-purple-50 px-3 py-1 rounded-lg text-sm">{p.returned}</span>
+                                        <div className="flex flex-col items-center">
+                                            <span className="font-bold text-purple-600 bg-purple-50 px-3 py-1 rounded-lg text-sm">{p.returned} Sipariş</span>
+                                            <span className="text-[10px] font-black text-purple-400 uppercase tracking-widest mt-1">{p.returnedUnits} Ürün</span>
+                                        </div>
                                     </td>
                                     <td className="px-8 py-5 text-center">
                                         <div className="flex items-center justify-center space-x-2">

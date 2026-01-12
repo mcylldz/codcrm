@@ -424,6 +424,7 @@ export async function getAnalytics(filters: {
         totalOrders: orders?.length || 0,
         confirmedOrders: 0,
         returnedOrders: 0,
+        returnedUnits: 0,
         statusCounts: { teyit_bekleniyor: 0, ulasilamadi: 0, teyit_alindi: 0, kabul_etmedi: 0, iade_donduruldu: 0 },
         grossTurnover: 0,
         netTurnover: 0,
@@ -450,7 +451,7 @@ export async function getAnalytics(filters: {
             productStatsMap[productKey] = {
                 id: pData?.id,
                 name: order.product || 'Bilinmeyen',
-                orders: 0, confirmed: 0, returned: 0,
+                orders: 0, confirmed: 0, returned: 0, returnedUnits: 0,
                 grossTurnover: 0, netTurnover: 0,
                 grossCost: 0, netCost: 0,
                 shipping: 0,
@@ -481,13 +482,16 @@ export async function getAnalytics(filters: {
         } else if (order.status === 'iade_donduruldu') {
             const returnCost = Number(order.return_cost || 0);
             const ship = calculateShippingCost(price);
+            const units = Number(order.package_id || 1);
             pStat.returned++;
+            pStat.returnedUnits += units;
             pStat.returnCost += returnCost;
             pStat.shipping += ship;
             pStat.netTurnover -= price;
             pStat.netCost -= cost;
 
             stats.returnedOrders++;
+            stats.returnedUnits += units;
             stats.netTurnover -= price;
             stats.netCost -= cost;
             stats.totalShipping += ship;
