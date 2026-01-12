@@ -1,7 +1,7 @@
 import { getOrders, getProducts } from '@/app/actions';
 import OrderSearchFilters from './OrderSearchFilters';
-import { getStatusLabel } from '@/lib/utils';
-import Link from 'next/link';
+import OrdersTable from './OrdersTable';
+import { ShoppingBag, TrendingUp, Search } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,82 +17,44 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
         endDate: sParams.endDate,
         product: sParams.product ? (Array.isArray(sParams.product) ? sParams.product : [sParams.product]) : undefined,
         excludeProduct: sParams.excludeProduct ? (Array.isArray(sParams.excludeProduct) ? sParams.excludeProduct : [sParams.excludeProduct]) : undefined,
+        search: sParams.search,
     };
 
     const orders = await getOrders(filters);
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h2 className="text-2xl font-bold text-gray-900">Sipariş Yönetimi</h2>
-                <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-semibold">
-                    {orders?.length || 0} Sipariş Bulundu
-                </span>
+        <div className="space-y-10 pb-20">
+            {/* Header Section */}
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 bg-gradient-to-br from-gray-900 to-blue-900 p-10 rounded-[40px] text-white shadow-2xl relative overflow-hidden group">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -mr-32 -mt-32 blur-3xl group-hover:bg-white/10 transition-all duration-700" />
+                <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-500/10 rounded-full -ml-24 -mb-24 blur-3xl" />
+
+                <div className="relative z-10 space-y-4">
+                    <div className="inline-flex items-center space-x-2 bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/20">
+                        <ShoppingBag size={16} className="text-blue-300" />
+                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-100">Sipariş Yönetimi</span>
+                    </div>
+                    <div>
+                        <h1 className="text-4xl font-black tracking-tight">Tüm Siparişler</h1>
+                        <p className="text-blue-200/60 font-medium mt-1">Sistemdeki tüm siparişleri filtreleyin, düzenleyin ve yönetin.</p>
+                    </div>
+                </div>
+
+                <div className="relative z-10 flex items-center space-x-4">
+                    <div className="bg-white/10 backdrop-blur-md border border-white/20 p-6 rounded-[32px] min-w-[160px]">
+                        <div className="flex items-center justify-between mb-2">
+                            <TrendingUp size={18} className="text-green-400" />
+                            <span className="text-[10px] font-black uppercase text-white/40 tracking-widest">Toplam</span>
+                        </div>
+                        <p className="text-3xl font-black">{orders?.length || 0}</p>
+                        <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest mt-1">Sipariş Bulundu</p>
+                    </div>
+                </div>
             </div>
 
             <OrderSearchFilters products={products} initialFilters={sParams} />
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Tarih</th>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Müşteri</th>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Durum</th>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Bölge</th>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Ürün</th>
-                                <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Tutar</th>
-                                <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">İşlem</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-100">
-                            {orders?.map((order) => (
-                                <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                        {new Date(order.created_at).toLocaleString('tr-TR')}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <div className="text-sm font-semibold text-gray-900">{order.name} {order.surname}</div>
-                                        <div className="text-xs text-gray-500">{order.phone}</div>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap">
-                                        <span className={`px-2 py-1 text-xs font-medium rounded-full ${order.status === 'teyit_alindi' ? 'bg-green-100 text-green-700' :
-                                            order.status === 'ulasilamadi' ? 'bg-orange-100 text-orange-700' :
-                                                order.status === 'kabul_etmedi' ? 'bg-red-100 text-red-700' :
-                                                    'bg-blue-100 text-blue-700'
-                                            }`}>
-                                            {getStatusLabel(order.status)}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-                                        {order.city} / {order.district}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-700">
-                                        <div className="font-medium">{order.product}</div>
-                                        <div className="text-xs text-gray-500">{order.package_id} Adet</div>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">
-                                        {order.total_price} ₺
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                                        <Link href={`/dashboard/sessions?single=${order.id}`} className="text-blue-600 font-semibold hover:text-blue-800 underline">
-                                            Detay
-                                        </Link>
-                                    </td>
-                                </tr>
-                            ))}
-                            {(!orders || orders.length === 0) && (
-                                <tr>
-                                    <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
-                                        Kriterlere uygun sipariş bulunamadı.
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+            <OrdersTable initialOrders={orders || []} />
         </div>
     );
 }

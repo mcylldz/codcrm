@@ -50,6 +50,7 @@ export default function SessionTable({ orders: initialOrders }: { orders: any[] 
             package_id: order.package_id || 1,
             total_price: order.total_price || 0,
             status: order.status || 'teyit_bekleniyor',
+            return_cost: order.return_cost || 0,
         });
     };
 
@@ -304,6 +305,30 @@ export default function SessionTable({ orders: initialOrders }: { orders: any[] 
                                     </select>
                                 </div>
                             </div>
+
+                            {editData.status === 'iade_donduruldu' && (
+                                <div className="p-6 bg-purple-50 rounded-[32px] border-2 border-purple-100 flex items-center justify-between animate-in slide-in-from-top-4 duration-300">
+                                    <div className="flex items-center space-x-4">
+                                        <div className="w-12 h-12 bg-purple-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
+                                            <AlertTriangle size={24} />
+                                        </div>
+                                        <div>
+                                            <h4 className="text-lg font-black text-purple-900 uppercase tracking-tight">İade Maliyeti</h4>
+                                            <p className="text-purple-600/80 font-bold text-xs tracking-tight">Bu iade için oluşan ek kargo/operasyon maliyetini girin.</p>
+                                        </div>
+                                    </div>
+                                    <div className="relative w-48">
+                                        <input
+                                            type="number"
+                                            placeholder="0.00"
+                                            value={editData.return_cost}
+                                            onChange={(e) => setEditData({ ...editData, return_cost: parseFloat(e.target.value) || 0 })}
+                                            className="w-full bg-white border-2 border-purple-200 rounded-2xl px-5 py-4 text-sm font-black text-purple-900 focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 outline-none transition-all shadow-sm pr-12 text-center"
+                                        />
+                                        <span className="absolute right-5 top-1/2 -translate-y-1/2 font-black text-purple-400">₺</span>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                         <div className="bg-gray-50/50 border-t border-gray-100 p-8 flex justify-end space-x-4">
                             <button

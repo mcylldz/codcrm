@@ -21,9 +21,10 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
         excludeStatus: excludeStatus,
         product: includeProduct,
         excludeProduct: excludeProduct,
+        search: sParams.search,
     };
 
-    const hasActiveFilter = sParams.startDate || sParams.endDate || includeStatus || excludeStatus || includeProduct || excludeProduct;
+    const hasActiveFilter = sParams.startDate || sParams.endDate || includeStatus || excludeStatus || includeProduct || excludeProduct || sParams.search;
     const orders = hasActiveFilter ? await getOrders(filters) : [];
 
     return (
@@ -36,7 +37,7 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
                             <PhoneCall className="text-white" size={24} />
                         </div>
                         <div>
-                            <h1 className="text-3xl font-black text-gray-900 tracking-tight text-white">Teyit Seansları</h1>
+                            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Teyit Seansları</h1>
                             <p className="text-sm text-gray-500 font-semibold">Sipariş filtreleme ve yönetim paneli</p>
                         </div>
                     </div>

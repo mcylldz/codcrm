@@ -217,8 +217,13 @@ export async function getOrders(filters: {
     endDate?: string;
     product?: string[];
     excludeProduct?: string[];
+    search?: string;
 }) {
     let query = supabaseAdmin.from('orders').select('*');
+
+    if (filters.search) {
+        query = query.or(`name.ilike.%${filters.search}%,surname.ilike.%${filters.search}%,phone.ilike.%${filters.search}%`);
+    }
 
     if (filters.status && filters.status.length > 0) {
         query = query.in('status', filters.status);
