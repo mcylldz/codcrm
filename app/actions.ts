@@ -125,31 +125,34 @@ export async function processReturnsFromExcel(excelData: { phone: string; return
             details: [] as any[],
         };
 
+        // 1. Fetch all confirmed orders to ensure matching even with different formatting
+        const { data: confirmedOrders, error: fetchError } = await supabaseAdmin
+            .from('orders')
+            .select('*')
+            .eq('status', 'teyit_alindi');
+
+        if (fetchError) throw fetchError;
+
         for (const item of excelData) {
             try {
-                // Clean phone number (remove spaces, dashes, etc.)
-                const cleanPhone = item.phone.replace(/[\s-()]/g, '').trim();
+                // Clean input phone
+                const inputPhone = item.phone.replace(/\D/g, '').slice(-10);
+                if (inputPhone.length < 10) continue;
 
-                // Find order by phone number (flexible matching for leading 0 or 90)
-                const { data: orders, error: searchError } = await supabaseAdmin
-                    .from('orders')
-                    .select('*')
-                    .ilike('phone', `%${item.phone}`)
-                    .eq('status', 'teyit_alindi'); // Only confirmed orders can be returned
+                // Find matching orders by cleaning DB numbers too
+                const matchingOrders = (confirmedOrders || []).filter(order => {
+                    const dbPhone = (order.phone || '').replace(/\D/g, '').slice(-10);
+                    return dbPhone === inputPhone;
+                });
 
-                if (searchError) {
-                    results.errors.push(`Search error for ${cleanPhone}: ${searchError.message}`);
-                    continue;
-                }
-
-                if (!orders || orders.length === 0) {
+                if (matchingOrders.length === 0) {
                     results.notFound++;
-                    results.details.push({ phone: cleanPhone, status: 'not_found' });
+                    results.details.push({ phone: item.phone, status: 'not_found' });
                     continue;
                 }
 
                 // Process each matching order
-                for (const order of orders) {
+                for (const order of matchingOrders) {
                     // 1. Update order status and add return cost
                     const { error: updateError } = await supabaseAdmin
                         .from('orders')
@@ -179,13 +182,13 @@ export async function processReturnsFromExcel(excelData: { phone: string; return
                     if (product) {
                         await supabaseAdmin
                             .from('products')
-                            .update({ stock: product.stock + quantity })
+                            .update({ stock: (product.stock || 0) + quantity })
                             .eq('id', product.id);
                     }
 
                     results.processed++;
                     results.details.push({
-                        phone: cleanPhone,
+                        phone: item.phone,
                         orderId: order.id,
                         product: order.product,
                         returnCost: item.returnCost,

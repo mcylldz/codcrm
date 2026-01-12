@@ -21,19 +21,19 @@ export default function ReturnUpload() {
             const reader = new FileReader();
             reader.onload = async (e) => {
                 try {
-                    const data = e.target?.result;
-                    const workbook = XLSX.read(data, { type: 'binary' });
+                    const data = new Uint8Array(e.target?.result as ArrayBuffer);
+                    const workbook = XLSX.read(data, { type: 'array' });
                     const sheetName = workbook.SheetNames[0];
                     const sheet = workbook.Sheets[sheetName];
                     const json: any[] = XLSX.utils.sheet_to_json(sheet, { header: 'A' });
 
                     // Map Excel data: D row (TELEFON), K row (IADE MALIYETI)
-                    const formattedData = json.slice(1).map(row => {
+                    const formattedData = json.map(row => {
                         const rawPhone = String(row['D'] || '').trim();
-                        // Normalize phone: remove non-digits, and leading 0/90
+                        // Normalize phone: remove all non-digits
                         let phone = rawPhone.replace(/\D/g, '');
-                        if (phone.startsWith('90')) phone = phone.substring(2);
-                        if (phone.startsWith('0')) phone = phone.substring(1);
+                        // If it starts with 0 or 90, we'll take the last 10 digits in the action
+                        // but let's keep it clean here too.
 
                         const returnCost = Number(row['K'] || 0);
 
@@ -44,7 +44,7 @@ export default function ReturnUpload() {
                     }).filter(item => item.phone && item.phone.length >= 10);
 
                     if (formattedData.length === 0) {
-                        throw new Error('Excel dosyasında geçerli telefon numarası bulunamadı. Lütfen telefonların D sütununda, maliyetin K sütununda olduğundan emin olun.');
+                        throw new Error('Excel dosyasında geçerli telefon numarası bulunamadı. Lütfen telefonların D sütununda (4. kolon), maliyetin K sütununda (11. kolon) olduğundan emin olun.');
                     }
 
                     const res = await processReturnsFromExcel(formattedData);
@@ -59,7 +59,7 @@ export default function ReturnUpload() {
                     setLoading(false);
                 }
             };
-            reader.readAsBinaryString(file);
+            reader.readAsArrayBuffer(file);
         } catch (err: any) {
             setError(err.message);
             setLoading(false);
