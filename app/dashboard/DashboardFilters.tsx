@@ -4,7 +4,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { Filter, Calendar, Package, Search, X } from 'lucide-react';
 
-export default function DashboardFilters({ products }: { products: any[] }) {
+export default function DashboardFilters({ products, basePath = '/dashboard' }: { products: any[], basePath?: string }) {
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -18,14 +18,14 @@ export default function DashboardFilters({ products }: { products: any[] }) {
         if (startDate) params.set('startDate', startDate);
         if (endDate) params.set('endDate', endDate);
         selectedProducts.forEach(p => params.append('product', p));
-        router.push(`/dashboard?${params.toString()}`);
+        router.push(`${basePath}?${params.toString()}`);
     };
 
     const clearFilters = () => {
         setStartDate('');
         setEndDate('');
         setSelectedProducts([]);
-        router.push('/dashboard');
+        router.push(basePath);
     };
 
     const toggleProduct = (name: string) => {

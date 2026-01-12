@@ -24,7 +24,7 @@ export default function InventoryTable({ initialProducts, suppliers }: { initial
     const [editForm, setEditForm] = useState<any>({});
 
     const [isAdding, setIsAdding] = useState(false);
-    const [newProduct, setNewProduct] = useState({ name: '', cost: 0 });
+    const [newProduct, setNewProduct] = useState({ name: '', cost: 0, domain: '' });
 
     const [isIntaking, setIsIntaking] = useState(false);
     const [intakeForm, setIntakeForm] = useState({
@@ -45,9 +45,12 @@ export default function InventoryTable({ initialProducts, suppliers }: { initial
     };
 
     const saveEdit = async () => {
-        const res = await updateProduct(editingId!, { cost: editForm.cost });
+        const res = await updateProduct(editingId!, {
+            cost: editForm.cost,
+            domain: editForm.domain
+        });
         if (res.success) {
-            setProducts(products.map(p => p.id === editingId ? { ...p, cost: editForm.cost } : p));
+            setProducts(products.map(p => p.id === editingId ? { ...p, cost: editForm.cost, domain: editForm.domain } : p));
             setEditingId(null);
         } else {
             alert(res.error);
@@ -131,9 +134,13 @@ export default function InventoryTable({ initialProducts, suppliers }: { initial
             {/* QUICK FORMS (SAME AS BEFORE) */}
             {isAdding && (
                 <div className="bg-gray-50 p-6 rounded-2xl border border-gray-200 flex flex-col md:flex-row space-y-4 md:space-y-0 md:space-x-4 items-end animate-in fade-in slide-in-from-top-4">
-                    <div className="flex-1 w-full">
+                    <div className="flex-1 w-full md:w-64">
                         <label className="block text-xs font-black text-gray-400 mb-1 uppercase tracking-widest">Ürün Adı</label>
                         <input className={inputClass} value={newProduct.name} onChange={e => setNewProduct({ ...newProduct, name: e.target.value })} placeholder="Kafa Lambası v3" />
+                    </div>
+                    <div className="flex-1 w-full">
+                        <label className="block text-xs font-black text-gray-400 mb-1 uppercase tracking-widest">Domain</label>
+                        <input className={inputClass} value={newProduct.domain} onChange={e => setNewProduct({ ...newProduct, domain: e.target.value })} placeholder="ornekdomain.com" />
                     </div>
                     <div className="w-full md:w-32">
                         <label className="block text-xs font-black text-gray-400 mb-1 uppercase tracking-widest">Maliyet (₺)</label>
@@ -196,6 +203,7 @@ export default function InventoryTable({ initialProducts, suppliers }: { initial
                         <thead className="bg-gray-50 uppercase text-[10px] font-black text-gray-400 tracking-widest">
                             <tr>
                                 <th className="px-8 py-5 text-left">Ürün Bilgisi</th>
+                                <th className="px-8 py-5 text-left">Domain</th>
                                 <th className="px-8 py-5 text-center">Kampanya Kodları</th>
                                 <th className="px-8 py-5 text-center">T. Alınan</th>
                                 <th className="px-8 py-5 text-center">T. Satılan</th>
@@ -214,6 +222,13 @@ export default function InventoryTable({ initialProducts, suppliers }: { initial
                                             </div>
                                             <span className="font-black text-gray-900 text-sm tracking-tight">{prod.name}</span>
                                         </div>
+                                    </td>
+                                    <td className="px-8 py-5 whitespace-nowrap">
+                                        {editingId === prod.id ? (
+                                            <input className="border-2 border-blue-200 rounded-xl px-3 py-1.5 w-full text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none" value={editForm.domain || ''} onChange={e => setEditForm({ ...editForm, domain: e.target.value })} placeholder="domain.com" />
+                                        ) : (
+                                            <span className="text-sm font-bold text-gray-500">{prod.domain || '-'}</span>
+                                        )}
                                     </td>
                                     <td className="px-8 py-5 text-center whitespace-nowrap">
                                         <button

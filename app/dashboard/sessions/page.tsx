@@ -1,7 +1,6 @@
 import { getProducts, getOrders } from '@/app/actions';
 import SessionTable from './SessionTable';
 import SessionFilters from './SessionFilters';
-import ReturnUpload from './ReturnUpload';
 import { PhoneCall } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
@@ -45,13 +44,8 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
             </div>
 
             <div className="max-w-[1800px] mx-auto px-6 py-8 space-y-8">
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    <div className="lg:col-span-2">
-                        <SessionFilters products={products || []} />
-                    </div>
-                    <div className="lg:col-span-1">
-                        <ReturnUpload />
-                    </div>
+                <div className="grid grid-cols-1 gap-8">
+                    <SessionFilters products={products || []} />
                 </div>
 
                 {hasActiveFilter ? (
