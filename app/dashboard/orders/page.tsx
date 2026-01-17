@@ -5,11 +5,32 @@ import { ShoppingBag, TrendingUp } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
-export default async function OrdersPage() {
-    // Fetch all orders for client-side filtering
-    // In production with large data, we would bind filters to URL params, 
-    // but for "Smart UI" responsiveness we'll start with client-side.
-    const orders = await getOrders({});
+export default async function OrdersPage(props: {
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
+    const searchParams = await props.searchParams;
+
+    // Parse filters from URL
+    const status = typeof searchParams.status === 'string' ? searchParams.status.split(',') : Array.isArray(searchParams.status) ? searchParams.status : undefined;
+    const product = typeof searchParams.product === 'string' ? searchParams.product.split(',') : Array.isArray(searchParams.product) ? searchParams.product : undefined;
+    const tags = typeof searchParams.tags === 'string' ? searchParams.tags.split(',') : Array.isArray(searchParams.tags) ? searchParams.tags : undefined;
+    const startDate = typeof searchParams.startDate === 'string' ? searchParams.startDate : undefined;
+    const endDate = typeof searchParams.endDate === 'string' ? searchParams.endDate : undefined;
+    const page = typeof searchParams.page === 'string' ? parseInt(searchParams.page) : 1;
+    const search = typeof searchParams.search === 'string' ? searchParams.search : undefined;
+
+    const ordersData = await getOrders({
+        status,
+        product,
+        tags,
+        startDate,
+        endDate,
+        page,
+        limit: 50,
+        search
+    });
+
+    const products = await getProducts();
 
     return (
         <div className="space-y-10 pb-20">
@@ -35,7 +56,7 @@ export default async function OrdersPage() {
                             <TrendingUp size={18} className="text-green-400" />
                             <span className="text-[10px] font-black uppercase text-white/40 tracking-widest">Toplam</span>
                         </div>
-                        <p className="text-3xl font-black">{orders?.length || 0}</p>
+                        <p className="text-3xl font-black">{ordersData.count || 0}</p>
                         <p className="text-[10px] font-bold text-white/60 uppercase tracking-widest mt-1">Sipariş Bulundu</p>
                     </div>
                 </div>
@@ -45,7 +66,13 @@ export default async function OrdersPage() {
             <ReturnUpload />
 
             {/* Unified Table */}
-            <UnifiedOrdersTable initialOrders={orders || []} />
+            <UnifiedOrdersTable
+                initialOrders={ordersData.data || []}
+                totalCount={ordersData.count || 0}
+                currentPage={ordersData.page}
+                totalPages={ordersData.totalPages}
+                products={products || []}
+            />
         </div>
     );
 }

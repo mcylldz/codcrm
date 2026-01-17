@@ -251,8 +251,11 @@ export async function getOrders(filters: {
     excludeProduct?: string[];
     search?: string;
     tags?: string[];
+    page?: number;     // Added for pagination
+    limit?: number;    // Added for pagination
 }) {
-    let query = supabaseAdmin.from('orders').select('*');
+    // Start building the query with a count
+    let query = supabaseAdmin.from('orders').select('*', { count: 'exact' });
 
     if (filters.search) {
         query = query.or(`name.ilike.%${filters.search}%,surname.ilike.%${filters.search}%,phone.ilike.%${filters.search}%,notes.ilike.%${filters.search}%`);
@@ -266,9 +269,8 @@ export async function getOrders(filters: {
     }
 
     if (filters.tags && filters.tags.length > 0) {
-        // filter by tags containment
-        // Postgres array contains: .contains('tags', ['tag1'])
-        query = query.contains('tags', filters.tags);
+        // filter by tags overlap (OR logic: contains at least one of the selected tags)
+        query = query.overlaps('tags', filters.tags);
     }
 
     if (filters.startDate) {
@@ -285,10 +287,19 @@ export async function getOrders(filters: {
         query = query.not('product', 'in', `(${filters.excludeProduct.join(',')})`);
     }
 
-    const { data, error } = await query.order('created_at', { ascending: false });
+    // Pagination logic
+    const page = filters.page || 1;
+    const limit = filters.limit || 50; // Default limit 50
+    const from = (page - 1) * limit;
+    const to = from + limit - 1;
+
+    const { data, error, count } = await query
+        .order('created_at', { ascending: false })
+        .range(from, to);
 
     if (error) throw new Error(error.message);
-    return data;
+
+    return { data, count, page, limit, totalPages: Math.ceil((count || 0) / limit) };
 }
 
 export async function getProducts() {
