@@ -1,7 +1,7 @@
 import { getProducts, getAnalytics } from '@/app/actions';
 import DashboardFilters from '../DashboardFilters';
 import ReturnsAnalytics from './ReturnsAnalytics';
-import ReturnUpload from '../sessions/ReturnUpload';
+import ReturnUpload from '../orders/ReturnUpload';
 import { RefreshCw } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
