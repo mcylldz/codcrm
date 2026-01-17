@@ -1,26 +1,15 @@
 import { getOrders, getProducts } from '@/app/actions';
-import OrderSearchFilters from './OrderSearchFilters';
-import OrdersTable from './OrdersTable';
-import { ShoppingBag, TrendingUp, Search } from 'lucide-react';
+import UnifiedOrdersTable from './UnifiedOrdersTable';
+import ReturnUpload from './ReturnUpload';
+import { ShoppingBag, TrendingUp } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
-export default async function OrdersPage({ searchParams }: { searchParams: Promise<any> }) {
-    const products = await getProducts();
-    const sParams = await searchParams;
-
-    // Parse filters from searchParams
-    const filters = {
-        status: sParams.status ? (Array.isArray(sParams.status) ? sParams.status : [sParams.status]) : undefined,
-        excludeStatus: sParams.excludeStatus ? (Array.isArray(sParams.excludeStatus) ? sParams.excludeStatus : [sParams.excludeStatus]) : undefined,
-        startDate: sParams.startDate,
-        endDate: sParams.endDate,
-        product: sParams.product ? (Array.isArray(sParams.product) ? sParams.product : [sParams.product]) : undefined,
-        excludeProduct: sParams.excludeProduct ? (Array.isArray(sParams.excludeProduct) ? sParams.excludeProduct : [sParams.excludeProduct]) : undefined,
-        search: sParams.search,
-    };
-
-    const orders = await getOrders(filters);
+export default async function OrdersPage() {
+    // Fetch all orders for client-side filtering
+    // In production with large data, we would bind filters to URL params, 
+    // but for "Smart UI" responsiveness we'll start with client-side.
+    const orders = await getOrders({});
 
     return (
         <div className="space-y-10 pb-20">
@@ -36,7 +25,7 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
                     </div>
                     <div>
                         <h1 className="text-4xl font-black tracking-tight">Tüm Siparişler</h1>
-                        <p className="text-blue-200/60 font-medium mt-1">Sistemdeki tüm siparişleri filtreleyin, düzenleyin ve yönetin.</p>
+                        <p className="text-blue-200/60 font-medium mt-1">Siparişleri yönetin, teyit arayın ve iadeleri işleyin.</p>
                     </div>
                 </div>
 
@@ -52,9 +41,11 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
                 </div>
             </div>
 
-            <OrderSearchFilters products={products} initialFilters={sParams} />
+            {/* Tools Section (Return Upload) */}
+            <ReturnUpload />
 
-            <OrdersTable initialOrders={orders || []} />
+            {/* Unified Table */}
+            <UnifiedOrdersTable initialOrders={orders || []} />
         </div>
     );
 }

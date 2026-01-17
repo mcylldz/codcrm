@@ -116,20 +116,26 @@ export async function deleteOrder(id: string) {
     }
 }
 
-export async function processReturnsFromExcel(excelData: { phone: string; returnCost: number }[]) {
+export async function processReturnsFromExcel(excelData: { phone: string; returnCost: number; kColumnValue?: number; iColumnValue?: number }[]) {
     try {
         const results = {
             processed: 0,
+            skipped: 0,
             notFound: 0,
             errors: [] as string[],
             details: [] as any[],
         };
 
-        // 1. Fetch all confirmed orders to ensure matching even with different formatting
-        const { data: confirmedOrders, error: fetchError } = await supabaseAdmin
+        // 1. Fetch ALL orders (confirmed or returned) to check for duplicates and process returns
+        // We need to check if a return was ALREADY processed for a phone number.
+        // The user said: "yüklenen exceldeki telefon numarasından daha önceden iade girilip girilmediğini kontrol etsin."
+        // This implies looking at ALL orders to see if any order with this phone is already 'iade_donduruldu' ??
+        // OR just if we have processed this specific person before?
+        // Assuming: If any order for this phone number is ALREADY in 'iade_donduruldu', skip it.
+
+        const { data: allOrders, error: fetchError } = await supabaseAdmin
             .from('orders')
-            .select('*')
-            .eq('status', 'teyit_alindi');
+            .select('*');
 
         if (fetchError) throw fetchError;
 
@@ -139,8 +145,8 @@ export async function processReturnsFromExcel(excelData: { phone: string; return
                 const inputPhone = item.phone.replace(/\D/g, '').slice(-10);
                 if (inputPhone.length < 10) continue;
 
-                // Find matching orders by cleaning DB numbers too
-                const matchingOrders = (confirmedOrders || []).filter(order => {
+                // Find matching orders
+                const matchingOrders = (allOrders || []).filter(order => {
                     const dbPhone = (order.phone || '').replace(/\D/g, '').slice(-10);
                     return dbPhone === inputPhone;
                 });
@@ -151,57 +157,83 @@ export async function processReturnsFromExcel(excelData: { phone: string; return
                     continue;
                 }
 
-                // Process each matching order
-                for (const order of matchingOrders) {
-                    // 1. Update order status and add return cost
-                    const { error: updateError } = await supabaseAdmin
-                        .from('orders')
-                        .update({
-                            status: 'iade_donduruldu',
-                            return_cost: item.returnCost,
-                            return_processed: true,
-                            return_date: new Date().toISOString(),
-                        })
-                        .eq('id', order.id);
-
-                    if (updateError) {
-                        results.errors.push(`Update error for order ${order.id}: ${updateError.message}`);
-                        continue;
-                    }
-
-                    // 2. Restore stock
-                    const productName = (order.product || '').trim().toLowerCase();
-                    const quantity = Number(order.package_id || 1);
-
-                    const { data: product } = await supabaseAdmin
-                        .from('products')
-                        .select('id, name, stock')
-                        .ilike('name', productName)
-                        .single();
-
-                    if (product) {
-                        await supabaseAdmin
-                            .from('products')
-                            .update({ stock: (product.stock || 0) + quantity })
-                            .eq('id', product.id);
-                    }
-
-                    results.processed++;
-                    results.details.push({
-                        phone: item.phone,
-                        orderId: order.id,
-                        product: order.product,
-                        returnCost: item.returnCost,
-                        status: 'processed',
-                    });
+                // CHECK FOR DUPLICATE RETURN
+                const alreadyReturned = matchingOrders.some(o => o.status === 'iade_donduruldu');
+                if (alreadyReturned) {
+                    results.skipped++;
+                    results.details.push({ phone: item.phone, status: 'skipped_already_returned' });
+                    continue;
                 }
+
+                // Filter to find the 'teyit_alindi' one to process (if multiple, we might pick the latest or all? Usually one active order)
+                // If there is no 'teyit_alindi' order but there are others (e.g. 'teyit_bekleniyor'), we can't 'return' them potentially?
+                // Logic: Find 'teyit_alindi' order to mark as returned.
+                const orderToReturn = matchingOrders.find(o => o.status === 'teyit_alindi');
+
+                if (!orderToReturn) {
+                    // exists but not confirmed?
+                    results.skipped++; // or not_found_confirmed
+                    results.details.push({ phone: item.phone, status: 'no_confirmed_order_found' });
+                    continue;
+                }
+
+                // CALCULATE RETURN COST
+                // Logic: K sütunu (kColumnValue) - I Satırındaki (iColumnValue) = Cost
+                // If not provided, fallback to item.returnCost (old way) or 0
+                let calculatedReturnCost = item.returnCost;
+                if (item.kColumnValue !== undefined && item.iColumnValue !== undefined) {
+                    calculatedReturnCost = Number(item.kColumnValue) - Number(item.iColumnValue);
+                }
+
+                // Process the order
+                const { error: updateError } = await supabaseAdmin
+                    .from('orders')
+                    .update({
+                        status: 'iade_donduruldu',
+                        return_cost: calculatedReturnCost,
+                        return_processed: true,
+                        return_date: new Date().toISOString(),
+                    })
+                    .eq('id', orderToReturn.id);
+
+                if (updateError) {
+                    results.errors.push(`Update error for order ${orderToReturn.id}: ${updateError.message}`);
+                    continue;
+                }
+
+                // Restore stock
+                const productName = (orderToReturn.product || '').trim().toLowerCase();
+                const quantity = Number(orderToReturn.package_id || 1);
+
+                const { data: product } = await supabaseAdmin
+                    .from('products')
+                    .select('id, name, stock')
+                    .ilike('name', productName)
+                    .single();
+
+                if (product) {
+                    await supabaseAdmin
+                        .from('products')
+                        .update({ stock: (product.stock || 0) + quantity })
+                        .eq('id', product.id);
+                }
+
+                results.processed++;
+                results.details.push({
+                    phone: item.phone,
+                    orderId: orderToReturn.id,
+                    product: orderToReturn.product,
+                    returnCost: calculatedReturnCost,
+                    status: 'processed',
+                });
+
             } catch (err: any) {
-                results.errors.push(`Processing error: ${err.message}`);
+                results.errors.push(`Processing error for ${item.phone}: ${err.message}`);
             }
         }
 
         revalidatePath('/dashboard');
-        revalidatePath('/dashboard/sessions');
+        revalidatePath('/dashboard/orders');
 
         return { success: true, results };
     } catch (error: any) {
@@ -218,11 +250,12 @@ export async function getOrders(filters: {
     product?: string[];
     excludeProduct?: string[];
     search?: string;
+    tags?: string[];
 }) {
     let query = supabaseAdmin.from('orders').select('*');
 
     if (filters.search) {
-        query = query.or(`name.ilike.%${filters.search}%,surname.ilike.%${filters.search}%,phone.ilike.%${filters.search}%`);
+        query = query.or(`name.ilike.%${filters.search}%,surname.ilike.%${filters.search}%,phone.ilike.%${filters.search}%,notes.ilike.%${filters.search}%`);
     }
 
     if (filters.status && filters.status.length > 0) {
@@ -230,6 +263,12 @@ export async function getOrders(filters: {
     }
     if (filters.excludeStatus && filters.excludeStatus.length > 0) {
         query = query.not('status', 'in', `(${filters.excludeStatus.join(',')})`);
+    }
+
+    if (filters.tags && filters.tags.length > 0) {
+        // filter by tags containment
+        // Postgres array contains: .contains('tags', ['tag1'])
+        query = query.contains('tags', filters.tags);
     }
 
     if (filters.startDate) {

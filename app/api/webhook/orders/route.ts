@@ -83,11 +83,12 @@ export async function POST(request: NextRequest) {
         }
 
         // Check stock
-        if (prod.stock < pkgAmount) {
-            return NextResponse.json({ success: false, error: `Insufficient stock. Current: ${prod.stock}, Requested: ${pkgAmount}` }, { status: 400 });
-        }
+        // DISABLED: allow negative stock
+        // if (prod.stock < pkgAmount) {
+        //    return NextResponse.json({ success: false, error: `Insufficient stock. Current: ${prod.stock}, Requested: ${pkgAmount}` }, { status: 400 });
+        // }
 
-        // Deduct stock
+        // Deduct stock (allow negative)
         const { error: updateStockError } = await supabaseAdmin
             .from('products')
             .update({ stock: prod.stock - pkgAmount })

@@ -35,11 +35,15 @@ export default function ReturnUpload() {
                         // If it starts with 0 or 90, we'll take the last 10 digits in the action
                         // but let's keep it clean here too.
 
-                        const returnCost = Number(row['K'] || 0);
+                        const kValue = Number(row['K'] || 0);
+                        const iValue = Number(row['I'] || 0);
+                        // We pass these to backend to calculate: K - I
 
                         return {
                             phone,
-                            returnCost
+                            returnCost: 0, // Legacy field, backend will recalculate if K/I provided
+                            kColumnValue: kValue,
+                            iColumnValue: iValue
                         };
                     }).filter(item => item.phone && item.phone.length >= 10);
 
@@ -137,7 +141,7 @@ export default function ReturnUpload() {
                                         </div>
                                         <div>
                                             <p className="text-purple-900 font-extrabold text-lg">Excel Dosyasını Sürükle veya Seç</p>
-                                            <p className="text-purple-600/60 text-xs font-bold mt-1 uppercase tracking-widest">Kolon D: Telefon | Kolon K: İade Maliyeti</p>
+                                            <p className="text-purple-600/60 text-xs font-bold mt-1 uppercase tracking-widest">Kolon D: Telefon | Kolon K - Kolon I: İade Maliyeti</p>
                                         </div>
                                     </div>
                                 )}

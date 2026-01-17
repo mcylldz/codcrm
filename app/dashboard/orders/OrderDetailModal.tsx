@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Save, Trash2, Phone, MapPin, Package, CreditCard, Calendar, Info, Clock, ExternalLink, RefreshCw, Edit } from 'lucide-react';
+import { X, Save, Trash2, Phone, MapPin, Package, CreditCard, Calendar, Info, Clock, ExternalLink, RefreshCw, Edit, MessageSquare, Tag, Plus } from 'lucide-react';
 import { STATUS_MAP, getStatusLabel } from '@/lib/utils';
 import { updateOrder, deleteOrder } from '@/app/actions';
 
@@ -9,6 +9,7 @@ interface OrderDetailModalProps {
     order: any;
     onClose: () => void;
     onUpdate: () => void;
+    isUnified?: boolean;
 }
 
 export default function OrderDetailModal({ order, onClose, onUpdate }: OrderDetailModalProps) {
@@ -147,9 +148,92 @@ export default function OrderDetailModal({ order, onClose, onUpdate }: OrderDeta
                         <div className="bg-gray-50 p-4 rounded-2xl flex items-center space-x-3">
                             <Clock size={20} className="text-gray-400" />
                             <div>
-                                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Son Güncelleme</p>
-                                <p className="text-sm font-bold text-gray-700">{new Date(form.updated_at || form.created_at).toLocaleDateString('tr-TR')}</p>
+                                <p className="text-xs font-bold text-gray-500">{new Date(form.updated_at || form.created_at).toLocaleDateString('tr-TR')}</p>
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Notes & Tags Section */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-8 border-t border-gray-100">
+                        <div className="space-y-6">
+                            <SectionTitle icon={<MessageSquare className="text-yellow-500" />} title="Sipariş Notları" />
+                            <Field
+                                label="Notlar"
+                                value={form.notes}
+                                isEditing={isEditing}
+                                type="textarea"
+                                onChange={(v: any) => setForm({ ...form, notes: v })}
+                            />
+                        </div>
+
+                        <div className="space-y-6">
+                            <SectionTitle icon={<Tag className="text-purple-500" />} title="Etiketler" />
+                            {isEditing ? (
+                                <div className="space-y-3">
+                                    <div className="flex flex-wrap gap-2 mb-2">
+                                        {(form.tags || []).map((tag: string, i: number) => (
+                                            <span key={i} className="px-3 py-1 bg-purple-100 text-purple-700 rounded-lg text-xs font-bold flex items-center space-x-1">
+                                                <span>{tag}</span>
+                                                <button onClick={() => {
+                                                    const newTags = form.tags.filter((_: any, idx: number) => idx !== i);
+                                                    setForm({ ...form, tags: newTags });
+                                                }} className="hover:text-purple-900"><X size={12} /></button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder="Yeni etiket ekle..."
+                                            className="flex-1 bg-gray-50 border-2 border-gray-100 rounded-xl px-4 py-2 text-xs font-bold focus:ring-4 focus:ring-purple-500/10 focus:border-purple-500 outline-none"
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    const val = e.currentTarget.value.trim();
+                                                    if (val) {
+                                                        const current = form.tags || [];
+                                                        if (!current.includes(val)) {
+                                                            setForm({ ...form, tags: [...current, val] });
+                                                        }
+                                                        e.currentTarget.value = '';
+                                                    }
+                                                }
+                                            }}
+                                        />
+                                        <button className="bg-purple-600 text-white p-2 rounded-xl" onClick={(e) => {
+                                            const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                                            const val = input.value.trim();
+                                            if (val) {
+                                                const current = form.tags || [];
+                                                if (!current.includes(val)) {
+                                                    setForm({ ...form, tags: [...current, val] });
+                                                }
+                                                input.value = '';
+                                            }
+                                        }}>
+                                            <Plus size={16} />
+                                        </button>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        <button onClick={() => {
+                                            const current = form.tags || [];
+                                            if (!current.includes('Sisteme Girildi')) setForm({ ...form, tags: [...current, 'Sisteme Girildi'] })
+                                        }} className="px-2 py-1 border border-purple-200 text-purple-600 rounded-lg text-[10px] font-bold hover:bg-purple-50">+ Sisteme Girildi</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex flex-wrap gap-2">
+                                    {(form.tags || []).length > 0 ? (
+                                        (form.tags || []).map((tag: string, i: number) => (
+                                            <span key={i} className="px-3 py-1 bg-purple-50 text-purple-700 rounded-lg text-xs font-bold border border-purple-100">
+                                                {tag}
+                                            </span>
+                                        ))
+                                    ) : (
+                                        <span className="text-gray-400 text-sm font-medium italic">Etiket bulunmuyor.</span>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
 
