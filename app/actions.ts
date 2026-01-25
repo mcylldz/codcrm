@@ -270,13 +270,12 @@ export async function getOrders(filters: {
     }
 
     if (filters.tags && filters.tags.length > 0) {
-        // filter by tags overlap (OR logic: contains at least one of the selected tags)
-        const tagsArr = `{"${filters.tags.join('","')}"}`;
-        query = query.filter('tags', 'ov', tagsArr);
+        query = query.overlaps('tags', filters.tags);
     }
     if (filters.excludeTags && filters.excludeTags.length > 0) {
         const excludeArr = `{"${filters.excludeTags.join('","')}"}`;
-        query = query.filter('tags', 'not.ov', excludeArr);
+        // Include orders where tags are null OR they don't overlap with excluded tags
+        query = query.or(`tags.is.null,tags.not.ov.${excludeArr}`);
     }
 
     if (filters.startDate) {
