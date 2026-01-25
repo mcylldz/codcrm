@@ -23,13 +23,15 @@ export default function UnifiedOrdersTable({
     totalCount,
     currentPage,
     totalPages,
-    products
+    products,
+    availableTags
 }: {
     initialOrders: any[];
     totalCount: number;
     currentPage: number;
     totalPages: number;
     products: any[];
+    availableTags: string[];
 }) {
     const router = useRouter();
     const pathname = usePathname();
@@ -41,54 +43,87 @@ export default function UnifiedOrdersTable({
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const [isFilterOpen, setIsFilterOpen] = useState(true);
 
+    // -- Local Filter State --
+    const [localFilters, setLocalFilters] = useState({
+        search: searchParams.get('search') || '',
+        status: searchParams.get('status')?.split(',').filter(Boolean) || [],
+        product: searchParams.get('product')?.split(',').filter(Boolean) || [],
+        tags: searchParams.get('tags')?.split(',').filter(Boolean) || [],
+        excludeTags: searchParams.get('excludeTags')?.split(',').filter(Boolean) || [],
+        startDate: searchParams.get('startDate') || '',
+        endDate: searchParams.get('endDate') || '',
+    });
+
     // Sync state with server prop
     useEffect(() => {
         setOrders(initialOrders);
     }, [initialOrders]);
 
     // -- URL Filter Management Helpers --
+    const applyFilters = () => {
+        const params = new URLSearchParams();
+        if (localFilters.search) params.set('search', localFilters.search);
+        if (localFilters.status.length > 0) params.set('status', localFilters.status.join(','));
+        if (localFilters.product.length > 0) params.set('product', localFilters.product.join(','));
+        if (localFilters.tags.length > 0) params.set('tags', localFilters.tags.join(','));
+        if (localFilters.excludeTags.length > 0) params.set('excludeTags', localFilters.excludeTags.join(','));
+        if (localFilters.startDate) params.set('startDate', localFilters.startDate);
+        if (localFilters.endDate) params.set('endDate', localFilters.endDate);
+        params.set('page', '1'); // Reset to page 1
+
+        router.push(pathname + '?' + params.toString());
+    };
+
+    const resetFilters = () => {
+        setLocalFilters({
+            search: '',
+            status: [],
+            product: [],
+            tags: [],
+            excludeTags: [],
+            startDate: '',
+            endDate: '',
+        });
+        router.push(pathname);
+    };
+
+    const handlePagination = (page: number) => {
+        const params = new URLSearchParams(searchParams.toString());
+        params.set('page', String(page));
+        router.push(pathname + '?' + params.toString());
+    };
 
     const createQueryString = useCallback(
         (params: Record<string, string | number | null>) => {
             const newSearchParams = new URLSearchParams(searchParams.toString());
-
             Object.entries(params).forEach(([key, value]) => {
-                if (value === null || value === '') {
-                    newSearchParams.delete(key);
-                } else {
-                    newSearchParams.set(key, String(value));
-                }
+                if (value === null || value === '') newSearchParams.delete(key);
+                else newSearchParams.set(key, String(value));
             });
-
             return newSearchParams.toString();
         },
         [searchParams]
     );
 
-    const updateFilter = (key: string, value: string | null) => {
-        // Reset page to 1 on filter change
-        router.push(pathname + '?' + createQueryString({ [key]: value, page: 1 }));
-    };
-
     // -- Multi-Select Helper Component --
     const FilterMultiSelect = ({
         label,
         options,
-        paramKey
+        values,
+        onChange
     }: {
         label: string;
         options: { value: string; label: string }[];
-        paramKey: string;
+        values: string[];
+        onChange: (newValues: string[]) => void;
     }) => {
-        const currentValues = searchParams.get(paramKey)?.split(',').filter(Boolean) || [];
         const [isOpen, setIsOpen] = useState(false);
 
         const toggleOption = (value: string) => {
-            const newValues = currentValues.includes(value)
-                ? currentValues.filter(v => v !== value)
-                : [...currentValues, value];
-
-            updateFilter(paramKey, newValues.length > 0 ? newValues.join(',') : null);
+            const newValues = values.includes(value)
+                ? values.filter(v => v !== value)
+                : [...values, value];
+            onChange(newValues);
         };
 
         return (
@@ -99,7 +134,7 @@ export default function UnifiedOrdersTable({
                     onClick={() => setIsOpen(!isOpen)}
                 >
                     <span className="truncate">
-                        {currentValues.length === 0 ? 'Tümü' : `${currentValues.length} Seçili`}
+                        {values.length === 0 ? 'Tümü' : `${values.length} Seçili`}
                     </span>
                     <ChevronDown size={14} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                 </div>
@@ -109,12 +144,12 @@ export default function UnifiedOrdersTable({
                         <div
                             className="px-3 py-2 hover:bg-gray-50 cursor-pointer flex items-center space-x-2 border-b border-gray-100"
                             onClick={() => {
-                                updateFilter(paramKey, null);
+                                onChange([]);
                                 setIsOpen(false);
                             }}
                         >
-                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${currentValues.length === 0 ? 'bg-blue-600 border-blue-600' : 'border-gray-300'}`}>
-                                {currentValues.length === 0 && <Check size={10} className="text-white" />}
+                            <div className={`w-4 h-4 rounded border flex items-center justify-center ${values.length === 0 ? 'bg-blue-600 border-blue-600' : 'border-gray-300'}`}>
+                                {values.length === 0 && <Check size={10} className="text-white" />}
                             </div>
                             <span className="text-xs font-bold text-gray-700">Tümü</span>
                         </div>
@@ -127,8 +162,8 @@ export default function UnifiedOrdersTable({
                                     toggleOption(opt.value);
                                 }}
                             >
-                                <div className={`w-4 h-4 rounded border flex items-center justify-center ${currentValues.includes(opt.value) ? 'bg-blue-600 border-blue-600' : 'border-gray-300'}`}>
-                                    {currentValues.includes(opt.value) && <Check size={10} className="text-white" />}
+                                <div className={`w-4 h-4 rounded border flex items-center justify-center ${values.includes(opt.value) ? 'bg-blue-600 border-blue-600' : 'border-gray-300'}`}>
+                                    {values.includes(opt.value) && <Check size={10} className="text-white" />}
                                 </div>
                                 <span className="text-xs font-medium text-gray-700">{opt.label}</span>
                             </div>
@@ -213,7 +248,6 @@ export default function UnifiedOrdersTable({
         XLSX.writeFile(wb, `siparisler_unified_${new Date().toISOString().split('T')[0]}.xlsx`);
     };
 
-    // Calculate pagination range
     const paginationRange = () => {
         const range = [];
         const start = Math.max(1, currentPage - 2);
@@ -225,94 +259,115 @@ export default function UnifiedOrdersTable({
     return (
         <div className="space-y-6">
             {/* Filters Section */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-visible text-sm relative z-20">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-visible text-sm relative z-30">
                 <div
                     className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center cursor-pointer select-none"
                     onClick={() => setIsFilterOpen(!isFilterOpen)}
                 >
                     <div className="flex items-center space-x-2 text-gray-700 font-bold">
                         <Filter size={16} />
-                        <span>Akıllı Filtreleme</span>
+                        <span>Gelişmiş Filtreleme</span>
                     </div>
                     {isFilterOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </div>
 
                 {isFilterOpen && (
-                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 animate-in slide-in-from-top-2 duration-200">
-                        {/* Search */}
-                        <div className="lg:col-span-1">
-                            <label className="text-[10px] uppercase font-black text-gray-400 tracking-wider mb-1 block">Arama</label>
-                            <div className="relative">
-                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                                <input
-                                    type="text"
-                                    placeholder="İsim, Tel, Not..."
-                                    defaultValue={searchParams.get('search') || ''}
-                                    onBlur={(e) => updateFilter('search', e.target.value)}
-                                    className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all font-medium text-gray-700"
-                                />
+                    <div className="p-6 space-y-6 animate-in slide-in-from-top-2 duration-200">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            {/* Search */}
+                            <div className="lg:col-span-1">
+                                <label className="text-[10px] uppercase font-black text-gray-400 tracking-wider mb-1 block">Arama</label>
+                                <div className="relative">
+                                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                    <input
+                                        type="text"
+                                        placeholder="İsim, Tel, Not..."
+                                        value={localFilters.search}
+                                        onChange={(e) => setLocalFilters({ ...localFilters, search: e.target.value })}
+                                        onKeyDown={(e) => e.key === 'Enter' && applyFilters()}
+                                        className="w-full pl-9 pr-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all font-medium text-gray-700"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Status Filter */}
+                            <FilterMultiSelect
+                                label="Durum"
+                                values={localFilters.status}
+                                options={Object.entries(STATUS_MAP).map(([k, v]) => ({ value: k, label: v.label }))}
+                                onChange={(vals) => setLocalFilters({ ...localFilters, status: vals })}
+                            />
+
+                            {/* Product Filter */}
+                            <FilterMultiSelect
+                                label="Ürün"
+                                values={localFilters.product}
+                                options={products.map(p => ({ value: p.name, label: p.name }))}
+                                onChange={(vals) => setLocalFilters({ ...localFilters, product: vals })}
+                            />
+
+                            {/* Date Range */}
+                            <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                    <label className="text-[10px] uppercase font-black text-gray-400 tracking-wider mb-1 block">Başlangıç</label>
+                                    <input
+                                        type="date"
+                                        className="w-full px-2 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium"
+                                        value={localFilters.startDate}
+                                        onChange={(e) => setLocalFilters({ ...localFilters, startDate: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] uppercase font-black text-gray-400 tracking-wider mb-1 block">Bitiş</label>
+                                    <input
+                                        type="date"
+                                        className="w-full px-2 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium"
+                                        value={localFilters.endDate}
+                                        onChange={(e) => setLocalFilters({ ...localFilters, endDate: e.target.value })}
+                                    />
+                                </div>
                             </div>
                         </div>
 
-                        {/* Status Filter */}
-                        <FilterMultiSelect
-                            label="Durum"
-                            paramKey="status"
-                            options={Object.entries(STATUS_MAP).map(([k, v]) => ({ value: k, label: v.label }))}
-                        />
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                            {/* Tag (Include) */}
+                            <FilterMultiSelect
+                                label="Etiket (Dahil Et)"
+                                values={localFilters.tags}
+                                options={availableTags.map(t => ({ value: t, label: t }))}
+                                onChange={(vals) => setLocalFilters({ ...localFilters, tags: vals })}
+                            />
 
-                        {/* Product Filter */}
-                        <FilterMultiSelect
-                            label="Ürün"
-                            paramKey="product"
-                            options={products.map(p => ({ value: p.name, label: p.name }))}
-                        />
+                            {/* Tag (Exclude) */}
+                            <FilterMultiSelect
+                                label="Etiket (Hariç Tut)"
+                                values={localFilters.excludeTags}
+                                options={availableTags.map(t => ({ value: t, label: t }))}
+                                onChange={(vals) => setLocalFilters({ ...localFilters, excludeTags: vals })}
+                            />
 
-                        {/* Tag Filter */}
-                        <FilterMultiSelect
-                            label="Etiket"
-                            paramKey="tags"
-                            options={[{ value: 'Sisteme Girildi', label: 'Sisteme Girildi' }]}
-                        />
-
-                        {/* Date Range */}
-                        <div className="lg:col-span-1 grid grid-cols-2 gap-2">
-                            <div>
-                                <label className="text-[10px] uppercase font-black text-gray-400 tracking-wider mb-1 block">Başlangıç</label>
-                                <input
-                                    type="date"
-                                    className="w-full px-2 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium"
-                                    value={searchParams.get('startDate') || ''}
-                                    onChange={(e) => updateFilter('startDate', e.target.value)}
-                                />
+                            <div className="lg:col-span-2 flex items-end space-x-3">
+                                <button
+                                    onClick={resetFilters}
+                                    className="px-4 py-2 text-gray-500 hover:text-gray-700 font-bold text-xs uppercase transition-colors"
+                                >
+                                    Sıfırla
+                                </button>
+                                <button
+                                    onClick={applyFilters}
+                                    className="flex-1 py-3 bg-gray-900 text-white rounded-xl hover:bg-black font-black text-xs uppercase tracking-widest transition-all flex items-center justify-center space-x-2 shadow-lg shadow-gray-200 active:scale-[0.98]"
+                                >
+                                    <Search size={14} />
+                                    <span>Sonuçları Göster</span>
+                                </button>
                             </div>
-                            <div>
-                                <label className="text-[10px] uppercase font-black text-gray-400 tracking-wider mb-1 block">Bitiş</label>
-                                <input
-                                    type="date"
-                                    className="w-full px-2 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-medium"
-                                    value={searchParams.get('endDate') || ''}
-                                    onChange={(e) => updateFilter('endDate', e.target.value)}
-                                />
-                            </div>
-                        </div>
-
-                        {/* Reset Button */}
-                        <div className="flex items-end lg:col-span-1">
-                            <button
-                                onClick={() => router.push(pathname)}
-                                className="w-full py-2.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 font-bold text-xs uppercase transition-colors flex items-center justify-center space-x-2"
-                            >
-                                <RefreshCw size={14} />
-                                <span>Sıfırla</span>
-                            </button>
                         </div>
                     </div>
                 )}
             </div>
 
             {/* Actions Bar */}
-            <div className="flex flex-wrap gap-4 justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-200">
+            <div className="flex flex-wrap gap-4 justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-200 relative z-20">
                 <div className="flex items-center space-x-4">
                     <span className="text-sm font-bold text-gray-500">
                         {selectedIds.size} Seçili
@@ -342,129 +397,123 @@ export default function UnifiedOrdersTable({
             {/* Table */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden relative z-10">
                 <div className="overflow-x-auto min-h-[400px]">
-                    <div className="relative">
-                        {/* Loading Overlay could be added here if needed using useTransition */}
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-gray-50 border-b border-gray-200">
-                                    <th className="p-4 w-10">
-                                        <input
-                                            type="checkbox"
-                                            checked={selectedIds.size === orders.length && orders.length > 0}
-                                            onChange={toggleSelectAll}
-                                            className="w-5 h-5 rounded-md border-gray-300 text-blue-600 focus:ring-blue-500"
-                                        />
-                                    </th>
-                                    <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Müşteri</th>
-                                    <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">İletişim</th>
-                                    <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Ürün</th>
-                                    <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Not</th>
-                                    <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Durum</th>
-                                    <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Etiketler</th>
-                                    <th className="p-4"></th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-50">
-                                {orders.length > 0 ? (
-                                    orders.map((order) => (
-                                        <tr
-                                            key={order.id}
-                                            className={`hover:bg-blue-50/30 transition-colors group cursor-pointer ${selectedIds.has(order.id) ? 'bg-blue-50/50' : ''}`}
-                                            onClick={() => setSelectedOrder(order)}
-                                        >
-                                            <td className="p-4" onClick={e => e.stopPropagation()}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedIds.has(order.id)}
-                                                    onChange={() => toggleSelect(order.id)}
-                                                    className="w-5 h-5 rounded-md border-gray-300 text-blue-600 focus:ring-blue-500"
-                                                />
-                                            </td>
-                                            <td className="p-4">
-                                                <div className="flex items-center space-x-3">
-                                                    <div className="w-10 h-10 bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl flex items-center justify-center text-gray-600 font-bold text-xs uppercase">
-                                                        {order.name?.[0]}{order.surname?.[0]}
+                    <table className="w-full text-left border-collapse">
+                        <thead>
+                            <tr className="bg-gray-50 border-b border-gray-200">
+                                <th className="p-4 w-10">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedIds.size === orders.length && orders.length > 0}
+                                        onChange={toggleSelectAll}
+                                        className="w-5 h-5 rounded-md border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                </th>
+                                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Müşteri</th>
+                                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">İletişim</th>
+                                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Ürün</th>
+                                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Not</th>
+                                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Durum</th>
+                                <th className="p-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Etiketler</th>
+                                <th className="p-4"></th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {orders.length > 0 ? (
+                                orders.map((order) => (
+                                    <tr
+                                        key={order.id}
+                                        className={`hover:bg-blue-50/30 transition-colors group cursor-pointer ${selectedIds.has(order.id) ? 'bg-blue-50/50' : ''}`}
+                                        onClick={() => setSelectedOrder(order)}
+                                    >
+                                        <td className="p-4" onClick={e => e.stopPropagation()}>
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedIds.has(order.id)}
+                                                onChange={() => toggleSelect(order.id)}
+                                                className="w-5 h-5 rounded-md border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            />
+                                        </td>
+                                        <td className="p-4">
+                                            <div className="flex items-center space-x-3">
+                                                <div className="w-10 h-10 bg-gradient-to-br from-gray-100 to-gray-200 rounded-xl flex items-center justify-center text-gray-600 font-bold text-xs uppercase">
+                                                    {order.name?.[0]}{order.surname?.[0]}
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-gray-900 leading-tight uppercase">{order.name} {order.surname}</p>
+                                                    <p className="text-[10px] font-bold text-gray-400 mt-1 flex items-center">
+                                                        <Calendar size={10} className="mr-1" />
+                                                        {new Date(order.created_at).toLocaleDateString('tr-TR')}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="p-4 text-center" onClick={e => e.stopPropagation()}>
+                                            <PhoneZoom phone={order.phone} />
+                                        </td>
+                                        <td className="p-4">
+                                            <div className="flex items-center space-x-2">
+                                                <div className="w-8 h-8 bg-orange-50 rounded-lg flex items-center justify-center text-orange-600">
+                                                    <Package size={14} />
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs font-black text-gray-800 uppercase">{order.product}</p>
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mt-0.5">{order.package_id} Adet • {order.total_price} ₺</p>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="p-4 text-center" onClick={e => e.stopPropagation()}>
+                                            {order.notes ? (
+                                                <div className="group/note relative inline-block">
+                                                    <div className="w-8 h-8 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center cursor-help">
+                                                        <div className="relative">
+                                                            <div className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full animate-ping"></div>
+                                                            <div className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></div>
+                                                        </div>
+                                                        <span className="font-bold text-xs">!</span>
                                                     </div>
-                                                    <div>
-                                                        <p className="font-bold text-gray-900 leading-tight uppercase">{order.name} {order.surname}</p>
-                                                        <p className="text-[10px] font-bold text-gray-400 mt-1 flex items-center">
-                                                            <Calendar size={10} className="mr-1" />
-                                                            {new Date(order.created_at).toLocaleDateString('tr-TR')}
-                                                        </p>
+                                                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-gray-900 text-white text-xs p-3 rounded-xl shadow-xl opacity-0 invisible group-hover/note:opacity-100 group-hover/note:visible transition-all z-50 pointer-events-none">
+                                                        <p className="font-medium text-center">{order.notes}</p>
+                                                        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>
                                                     </div>
                                                 </div>
-                                            </td>
-                                            <td className="p-4 text-center" onClick={e => e.stopPropagation()}>
-                                                <PhoneZoom phone={order.phone} />
-                                            </td>
-                                            <td className="p-4">
-                                                <div className="flex items-center space-x-2">
-                                                    <div className="w-8 h-8 bg-orange-50 rounded-lg flex items-center justify-center text-orange-600">
-                                                        <Package size={14} />
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-xs font-black text-gray-800 uppercase">{order.product}</p>
-                                                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mt-0.5">{order.package_id} Adet • {order.total_price} ₺</p>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td className="p-4 text-center" onClick={e => e.stopPropagation()}>
-                                                {order.notes ? (
-                                                    <div className="group/note relative inline-block">
-                                                        <div className="w-8 h-8 bg-yellow-100 text-yellow-600 rounded-full flex items-center justify-center cursor-help">
-                                                            <div className="relative">
-                                                                <div className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full animate-ping"></div>
-                                                                <div className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></div>
-                                                            </div>
-                                                            {/* If we had an icon, it would go here, using a pseudo-element for now */}
-                                                            <span className="font-bold text-xs">!</span>
-                                                        </div>
-
-                                                        {/* Tooltip Bubble */}
-                                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-gray-900 text-white text-xs p-3 rounded-xl shadow-xl opacity-0 invisible group-hover/note:opacity-100 group-hover/note:visible transition-all z-50 pointer-events-none">
-                                                            <p className="font-medium text-center">{order.notes}</p>
-                                                            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>
-                                                        </div>
-                                                    </div>
+                                            ) : (
+                                                <span className="text-gray-300">-</span>
+                                            )}
+                                        </td>
+                                        <td className="p-4 text-center">
+                                            <span className={`inline-flex px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${STATUS_MAP[order.status]?.color || 'bg-gray-100 text-gray-700'}`}>
+                                                {STATUS_MAP[order.status]?.label || order.status}
+                                            </span>
+                                        </td>
+                                        <td className="p-4 text-center">
+                                            <div className="flex flex-wrap justify-center gap-1">
+                                                {order.tags && order.tags.length > 0 ? (
+                                                    order.tags.map((tag: string, i: number) => (
+                                                        <span key={i} className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-bold border border-blue-100">
+                                                            {tag}
+                                                        </span>
+                                                    ))
                                                 ) : (
-                                                    <span className="text-gray-300">-</span>
+                                                    <span className="text-gray-300 text-xs">-</span>
                                                 )}
-                                            </td>
-                                            <td className="p-4 text-center">
-                                                <span className={`inline-flex px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest ${STATUS_MAP[order.status]?.color || 'bg-gray-100 text-gray-700'}`}>
-                                                    {STATUS_MAP[order.status]?.label || order.status}
-                                                </span>
-                                            </td>
-                                            <td className="p-4 text-center">
-                                                <div className="flex flex-wrap justify-center gap-1">
-                                                    {order.tags && order.tags.length > 0 ? (
-                                                        order.tags.map((tag: string, i: number) => (
-                                                            <span key={i} className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-bold border border-blue-100">
-                                                                {tag}
-                                                            </span>
-                                                        ))
-                                                    ) : (
-                                                        <span className="text-gray-300 text-xs">-</span>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="p-4 text-right">
-                                                <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition">
-                                                    <Edit2 size={16} />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))
-                                ) : (
-                                    <tr>
-                                        <td colSpan={8} className="p-12 text-center text-gray-500 font-medium">
-                                            Kriterlere uygun sipariş bulunamadı.
+                                            </div>
+                                        </td>
+                                        <td className="p-4 text-right">
+                                            <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition">
+                                                <Edit2 size={16} />
+                                            </button>
                                         </td>
                                     </tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan={8} className="p-12 text-center text-gray-500 font-medium">
+                                        Kriterlere uygun sipariş bulunamadı.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
                 </div>
 
                 {/* Pagination Controls */}
@@ -475,7 +524,7 @@ export default function UnifiedOrdersTable({
                         </div>
                         <div className="flex items-center space-x-2">
                             <button
-                                onClick={() => router.push(pathname + '?' + createQueryString({ page: currentPage - 1 }))}
+                                onClick={() => handlePagination(currentPage - 1)}
                                 disabled={currentPage === 1}
                                 className="p-2 bg-white border border-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition"
                             >
@@ -485,10 +534,10 @@ export default function UnifiedOrdersTable({
                             {paginationRange().map(p => (
                                 <button
                                     key={p}
-                                    onClick={() => router.push(pathname + '?' + createQueryString({ page: p }))}
+                                    onClick={() => handlePagination(p)}
                                     className={`w-8 h-8 flex items-center justify-center rounded-lg text-xs font-bold transition ${currentPage === p
-                                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
-                                            : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-100'
+                                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30'
+                                        : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-100'
                                         }`}
                                 >
                                     {p}
@@ -496,7 +545,7 @@ export default function UnifiedOrdersTable({
                             ))}
 
                             <button
-                                onClick={() => router.push(pathname + '?' + createQueryString({ page: currentPage + 1 }))}
+                                onClick={() => handlePagination(currentPage + 1)}
                                 disabled={currentPage === totalPages}
                                 className="p-2 bg-white border border-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 transition"
                             >
@@ -524,7 +573,7 @@ function PhoneZoom({ phone }: { phone: string }) {
     const [hoverTimeout, setHoverTimeout] = useState<NodeJS.Timeout | null>(null);
 
     const handleMouseEnter = () => {
-        const timeout = setTimeout(() => setIsZoomed(true), 1500); // Wait 1.5s
+        const timeout = setTimeout(() => setIsZoomed(true), 1500);
         setHoverTimeout(timeout);
     };
 

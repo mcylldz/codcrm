@@ -1,4 +1,4 @@
-import { getOrders, getProducts } from '@/app/actions';
+import { getOrders, getProducts, getUniqueTags } from '@/app/actions';
 import UnifiedOrdersTable from './UnifiedOrdersTable';
 import ReturnUpload from './ReturnUpload';
 import { ShoppingBag, TrendingUp } from 'lucide-react';
@@ -14,6 +14,7 @@ export default async function OrdersPage(props: {
     const status = typeof searchParams.status === 'string' ? searchParams.status.split(',') : Array.isArray(searchParams.status) ? searchParams.status : undefined;
     const product = typeof searchParams.product === 'string' ? searchParams.product.split(',') : Array.isArray(searchParams.product) ? searchParams.product : undefined;
     const tags = typeof searchParams.tags === 'string' ? searchParams.tags.split(',') : Array.isArray(searchParams.tags) ? searchParams.tags : undefined;
+    const excludeTags = typeof searchParams.excludeTags === 'string' ? searchParams.excludeTags.split(',') : Array.isArray(searchParams.excludeTags) ? searchParams.excludeTags : undefined;
     const startDate = typeof searchParams.startDate === 'string' ? searchParams.startDate : undefined;
     const endDate = typeof searchParams.endDate === 'string' ? searchParams.endDate : undefined;
     const page = typeof searchParams.page === 'string' ? parseInt(searchParams.page) : 1;
@@ -23,6 +24,7 @@ export default async function OrdersPage(props: {
         status,
         product,
         tags,
+        excludeTags,
         startDate,
         endDate,
         page,
@@ -31,6 +33,7 @@ export default async function OrdersPage(props: {
     });
 
     const products = await getProducts();
+    const tagsList = await getUniqueTags();
 
     return (
         <div className="space-y-10 pb-20">
@@ -72,6 +75,7 @@ export default async function OrdersPage(props: {
                 currentPage={ordersData.page}
                 totalPages={ordersData.totalPages}
                 products={products || []}
+                availableTags={tagsList || []}
             />
         </div>
     );

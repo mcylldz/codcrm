@@ -251,6 +251,7 @@ export async function getOrders(filters: {
     excludeProduct?: string[];
     search?: string;
     tags?: string[];
+    excludeTags?: string[];
     page?: number;     // Added for pagination
     limit?: number;    // Added for pagination
 }) {
@@ -271,6 +272,9 @@ export async function getOrders(filters: {
     if (filters.tags && filters.tags.length > 0) {
         // filter by tags overlap (OR logic: contains at least one of the selected tags)
         query = query.overlaps('tags', filters.tags);
+    }
+    if (filters.excludeTags && filters.excludeTags.length > 0) {
+        query = query.not('tags', 'overlaps', filters.excludeTags);
     }
 
     if (filters.startDate) {
@@ -306,6 +310,29 @@ export async function getProducts() {
     const { data, error } = await supabaseAdmin.from('products').select('*').order('name');
     if (error) throw new Error(error.message);
     return data;
+}
+
+export async function getUniqueTags() {
+    try {
+        const { data, error } = await supabaseAdmin
+            .from('orders')
+            .select('tags')
+            .not('tags', 'is', null);
+
+        if (error) throw error;
+
+        const allTags = new Set<string>();
+        data.forEach(order => {
+            if (Array.isArray(order.tags)) {
+                order.tags.forEach(tag => allTags.add(tag));
+            }
+        });
+
+        return Array.from(allTags).sort();
+    } catch (error) {
+        console.error('Error fetching tags:', error);
+        return ['Sisteme Girildi']; // Fallback
+    }
 }
 
 export async function getOrdersByDate(dateStr: string) {
